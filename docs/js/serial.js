@@ -152,6 +152,10 @@ function calculateCRC16(data, len) {
 }
 
 function processBuffer(buf) {
+  // Garde-fou anti-overflow : Si le tampon accumule trop de bruit ou de données corrompues (sans retour à la ligne ou Magic)
+  if (buf.length > 4096) {
+    buf = buf.slice(buf.length - 1024); // On ne garde que la fin pour tenter de se resynchroniser
+  }
   let offset = 0;
   while (offset < buf.length) {
     // Check NectarMC Binary Frame Magic Byte (0xEB)
@@ -376,6 +380,11 @@ function appendLog(msg) {
   div.textContent = msg;
   terminalLogs.appendChild(div);
   terminalLogs.scrollTop = terminalLogs.scrollHeight;
+  
+  // Garde-fou anti-overflow : Limiter le nombre de div dans la console à 100 lignes
+  if (terminalLogs.children.length > 100) {
+    terminalLogs.removeChild(terminalLogs.firstChild);
+  }
 }
 
 async function sendData(data) {

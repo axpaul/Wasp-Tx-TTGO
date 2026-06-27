@@ -48,7 +48,7 @@
   <main class="dashboard-grid">
     <!-- 1. PANNEAU DE CONNEXION SÉRIE -->
     <section class="card connection-panel">
-      <h2>🔌 Liaison Série USB</h2>
+      <h2>🔌 USB Serial Link</h2>
       <div class="card-content">
         <div class="form-group">
           <label for="baudrate">Vitesse de transmission (Baud) :</label>
@@ -66,30 +66,7 @@
       </div>
     </section>
 
-    <!-- 2. FLASHER ESP WEB TOOLS -->
-    <section class="card config-panel">
-      <h2>⚡ Web Flasher Wasp-TX</h2>
-      <div class="card-content">
-        <p class="description" style="margin-bottom: 1rem;">Flashez directement le firmware sur la carte ESP32 depuis le navigateur.</p>
-        <div class="form-group">
-          <label for="board-select">Sélection de la carte :</label>
-          <select id="board-select">
-            <option value="manifest_v1_1.json" selected>T-Beam V1.1 (AXP192)</option>
-            <option value="manifest_v1_2.json">T-Beam V1.2 (AXP2101)</option>
-          </select>
-        </div>
-        <div class="button-group-grid" style="margin-top: 2rem;">
-          <script type="module" src="https://unpkg.com/esp-web-tools@9.4.0/dist/web/install-button.js?module"></script>
-          <esp-web-install-button id="install-button" manifest="manifest_v1_1.json">
-            <button slot="activate" class="btn btn-accent" style="width: 100%;">Flasher la carte</button>
-            <span slot="unsupported" class="text-danger">Navigateur non supporté.</span>
-            <span slot="not-allowed" class="text-danger">Connexion non autorisée.</span>
-          </esp-web-install-button>
-        </div>
-      </div>
-    </section>
-
-    <!-- 3. CONFIGURATION DE LA RADIO (AT COMMANDS) -->
+    <!-- 2. CONFIGURATION DE LA RADIO (AT COMMANDS) -->
     <section class="card config-panel">
       <h2>⚙️ Radio Settings</h2>
       <div class="card-content">
@@ -155,10 +132,76 @@
       </div>
     </section>
 
-    <!-- 5. TÉLÉMÉTRIE LIVE (TABLEAU) -->
+    <!-- 3. FLASHER ESP WEB TOOLS -->
+    <section class="card config-panel">
+      <h2>⚡ Web Flasher Wasp-TX</h2>
+      <div class="card-content">
+        <p class="description" style="margin-bottom: 1rem;">Flashez directement le firmware sur la carte ESP32 depuis le navigateur.</p>
+        <div class="form-group">
+          <label for="board-select">Sélection de la carte :</label>
+          <select id="board-select">
+            <option value="manifest_v1_1.json" selected>T-Beam V1.1 (AXP192)</option>
+            <option value="manifest_v1_2.json">T-Beam V1.2 (AXP2101)</option>
+          </select>
+        </div>
+        <div class="button-group-grid" style="margin-top: 2rem;">
+          <script type="module" src="https://unpkg.com/esp-web-tools@9.4.0/dist/web/install-button.js?module"></script>
+          <esp-web-install-button id="install-button" manifest="manifest_v1_1.json">
+            <button slot="activate" class="btn btn-accent" style="width: 100%;">Flasher la carte</button>
+            <span slot="unsupported" class="text-danger">Navigateur non supporté.</span>
+            <span slot="not-allowed" class="text-danger">Connexion non autorisée.</span>
+          </esp-web-install-button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. LIVE TELEMETRY WIDGETS -->
+    <section class="card stats-panel full-width">
+      <h2>📡 Télémétrie Wasp Décryptée</h2>
+      <div class="card-content stats-content">
+        <div class="mini-stats">
+          <div class="stat-box">
+            <span class="stat-val" id="stat-alt">--</span>
+            <span class="stat-lbl">ALTITUDE (m)</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-val" id="stat-spd">--</span>
+            <span class="stat-lbl">VITESSE (km/h)</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-val" id="stat-sat">--</span>
+            <span class="stat-lbl">SATELLITES</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-val" id="stat-temp">--</span>
+            <span class="stat-lbl">TEMPÉRATURE (°C)</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-val" id="stat-bat">--</span>
+            <span class="stat-lbl">BATTERIE (V)</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-val" id="stat-rssi">--</span>
+            <span class="stat-lbl">RSSI / SNR</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. MAP DASHBOARD -->
+    <section class="card map-panel full-width">
+      <div class="card-header">
+        <h2>🗺️ Position GPS Live</h2>
+      </div>
+      <div class="card-content">
+        <div id="map" style="height: 350px; border-radius: 8px; background: #222; border: 1px solid var(--bg-card-border); z-index: 1;"></div>
+      </div>
+    </section>
+
+    <!-- 6. RAW NECTARMC FRAMES TABLE -->
     <section class="card telemetry-panel full-width">
       <div class="card-header">
-        <h2>📡 Live received frames (WASP)</h2>
+        <h2>🛸 Live received frames (NectarMC)</h2>
         <div class="header-actions">
           <button id="btn-export-telemetry" class="btn btn-success btn-sm">EXPORT CSV</button>
           <button id="btn-clear-telemetry" class="btn btn-secondary btn-sm">CLEAR</button>
@@ -170,34 +213,25 @@
             <tr>
               <th>INDEX</th>
               <th>TIMESTAMP</th>
-              <th>POSITION (LAT, LON)</th>
-              <th>ALTITUDE</th>
-              <th>SPEED</th>
-              <th>SAT</th>
-              <th>TEMP</th>
-              <th>BATTERY</th>
+              <th>TRACKER (SSID)</th>
+              <th>APID</th>
+              <th>SIZE</th>
+              <th>RSSI</th>
+              <th>SNR</th>
+              <th>CRC</th>
+              <th>PAYLOAD (HEX)</th>
             </tr>
           </thead>
           <tbody id="telemetry-tbody">
             <tr id="row-empty">
-              <td id="lbl-empty-telemetry" colspan="8" class="text-center text-secondary">No frames received yet. Connect the serial port and power on your trackers.</td>
+              <td id="lbl-empty-telemetry" colspan="9" class="text-center text-secondary">No frames received yet. Connect the serial port and power on your trackers.</td>
             </tr>
           </tbody>
         </table>
       </div>
     </section>
 
-    <!-- MAP DASHBOARD -->
-    <section class="card map-panel full-width">
-      <div class="card-header">
-        <h2>🗺️ Position GPS Live</h2>
-      </div>
-      <div class="card-content">
-        <div id="map" style="height: 350px; border-radius: 8px; background: #222; border: 1px solid var(--bg-card-border); z-index: 1;"></div>
-      </div>
-    </section>
-
-    <!-- 6. TERMINAL DE COMMANDES SÉRIE -->
+    <!-- 7. TERMINAL DE COMMANDES SÉRIE -->
     <section class="card terminal-panel full-width">
       <div class="card-header">
         <h2>📟 Console & Terminal</h2>

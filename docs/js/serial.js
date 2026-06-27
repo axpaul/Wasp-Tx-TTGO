@@ -15,6 +15,14 @@ const btnAtCmds = document.querySelectorAll('.btn-at');
 const telemetryTbody = document.getElementById('telemetry-tbody');
 const lblEmptyTelemetry = document.getElementById('row-empty');
 
+// Decoded Telemetry elements
+const statAlt = document.getElementById('stat-alt');
+const statSpd = document.getElementById('stat-spd');
+const statSat = document.getElementById('stat-sat');
+const statTemp = document.getElementById('stat-temp');
+const statBat = document.getElementById('stat-bat');
+const statRssi = document.getElementById('stat-rssi');
+
 // Check for Web Serial API support
 if (!("serial" in navigator)) {
   connBadge.textContent = "Web Serial Non Supporté";
@@ -38,6 +46,7 @@ btnConnect.addEventListener('click', async () => {
     terminalInput.disabled = false;
     btnSend.disabled = false;
 
+    // Enable config panel controls
     document.querySelectorAll('.config-panel input, .config-panel select, .config-panel button').forEach(el => {
       if(el.id !== 'board-select' && !el.closest('esp-web-install-button')) el.disabled = false;
     });
@@ -68,8 +77,9 @@ btnDisconnect.addEventListener('click', async () => {
   terminalInput.disabled = true;
   btnSend.disabled = true;
   
+  // Disable config panel controls
   document.querySelectorAll('.config-panel input, .config-panel select, .config-panel button').forEach(el => {
-      if(el.id !== 'board-select' && !el.closest('esp-web-install-button')) el.disabled = true;
+    if(el.id !== 'board-select' && !el.closest('esp-web-install-button')) el.disabled = true;
   });
   
   appendLog("--- Déconnecté ---");
@@ -100,6 +110,21 @@ async function readLoop() {
   }
 }
 
+function calculateCRC16(data, len) {
+  let crc = 0xFFFF;
+  for (let i = 0; i < len; i++) {
+    crc ^= (data[i] << 8);
+    for (let j = 0; j < 8; j++) {
+      if (crc & 0x8000) {
+        crc = ((crc << 1) ^ 0x1021) & 0xFFFF;
+      } else {
+        crc = (crc << 1) & 0xFFFF;
+      }
+    }
+  }
+  return crc;
+}
+
 function processBuffer(buf) {
   let offset = 0;
   while (offset < buf.length) {
@@ -107,27 +132,41 @@ function processBuffer(buf) {
     if (buf[offset] === 0xEB) {
       if (buf.length >= offset + 4) {
         let payloadSize = buf[offset + 3];
-        // v1.4.0 format: MAGIC(1) + ID(2) + SIZE(1) + PAYLOAD(N) + RSSI(1) + SNR(1) + TS(4) + CRC(2) + \n(1) = N + 13
-        let frameLength = payloadSize + 13;
         
-        if (buf.length >= offset + frameLength) {
-          if (buf[offset + frameLength - 1] === 0x0A) {
-            let frame = buf.slice(offset, offset + frameLength);
-            parseNectarFrame(frame, payloadSize);
-            offset += frameLength;
-            continue;
-          }
+        // Define length variants (v1.4.0 has 4-byte TS, v1.3.1 does not)
+        let frameLength140 = payloadSize + 13; // 1 + 2 + 1 + N + 1 + 1 + 4 + 2 + 1
+        let frameLength131 = payloadSize + 9;  // 1 + 2 + 1 + N + 1 + 1 + 2 + 1
+        
+        let detectedLength = 0;
+        let hasTimestamp = false;
+        
+        if (buf.length >= offset + frameLength140 && buf[offset + frameLength140 - 1] === 0x0A) {
+          detectedLength = frameLength140;
+          hasTimestamp = true;
+        } else if (buf.length >= offset + frameLength131 && buf[offset + frameLength131 - 1] === 0x0A) {
+          detectedLength = frameLength131;
+          hasTimestamp = false;
+        }
+        
+        if (detectedLength > 0) {
+          let frame = buf.slice(offset, offset + detectedLength);
+          parseNectarFrame(frame, payloadSize, hasTimestamp);
+          offset += detectedLength;
+          continue;
         } else {
-          // Need more data for full frame
-          break;
+          // If we have enough total bytes past the max possible frame size and no newline marker matched
+          // then it's corrupted binary data, we skip this 0xEB byte and let it fall through.
+          let maxLen = Math.max(frameLength140, frameLength131);
+          if (buf.length < offset + maxLen) {
+            break; // Wait for more bytes
+          }
         }
       } else {
-        // Need more data for size
-        break;
+        break; // Wait for size byte
       }
     }
     
-    // Text Line parsing
+    // Fallback: Text Line parsing
     let newlineIdx = buf.indexOf(10, offset); // 10 is '\n'
     if (newlineIdx !== -1) {
       let lineBuf = buf.slice(offset, newlineIdx);
@@ -135,28 +174,64 @@ function processBuffer(buf) {
       if (lineStr.length > 0) {
         appendLog(lineStr);
         if(lineStr.startsWith('[TX]')) {
-          parseTelemetryText(lineStr); // Fallback text parsing just in case
+          parseTelemetryText(lineStr);
         }
       }
       offset = newlineIdx + 1;
     } else {
-      break; // Need more data for next \n
+      break; // Wait for next newline
     }
   }
   return buf.slice(offset);
 }
 
-function parseNectarFrame(frame, payloadSize) {
+function parseNectarFrame(frame, payloadSize, hasTimestamp) {
   let dv = new DataView(frame.buffer, frame.byteOffset, frame.byteLength);
   
   // Extract Nectar Metadata
   let id_mission = dv.getUint16(1, true);
+  let ssid_type = (id_mission >> 14) & 0x03;
+  let ssid_num = (id_mission >> 6) & 0xFF;
+  let apid = id_mission & 0x3F;
+  
   let rssi = dv.getInt8(4 + payloadSize);
   let snr = dv.getInt8(5 + payloadSize);
-  let tsEpoch = dv.getUint32(6 + payloadSize, true);
   
-  // Is it Wasp-TX payload?
-  if (payloadSize === 33) {
+  let tsEpoch;
+  if (hasTimestamp) {
+    tsEpoch = dv.getUint32(6 + payloadSize, true);
+  } else {
+    tsEpoch = Math.floor(Date.now() / 1000);
+  }
+  
+  // Verify CRC16-CCITT
+  // v1.4.0 CRC starts at index frame.length - 3
+  let receivedCRC = dv.getUint16(frame.length - 3, true);
+  let computedCRC = calculateCRC16(frame, frame.length - 3);
+  let crcOK = (receivedCRC === computedCRC);
+  
+  // Payload hex representation
+  let payloadBytes = frame.slice(4, 4 + payloadSize);
+  let payloadHex = Array.prototype.map.call(payloadBytes, x => ('0' + x.toString(16)).toUpperCase()).join(' ');
+  
+  // Map ID types to strings
+  const MISSION_TYPES = ["FX", "MF", "BALLOON", "OTHER"];
+  let trackerSSID = `${MISSION_TYPES[ssid_type]}-${ssid_num}`;
+  
+  // Add to NectarMC table
+  addNectarFrameToTable({
+    ts: new Date(tsEpoch * 1000).toISOString().replace('T', ' ').substring(0, 19),
+    tracker: trackerSSID,
+    apid: apid,
+    size: payloadSize,
+    rssi: rssi,
+    snr: (snr / 4).toFixed(2),
+    crc: crcOK ? '<span style="color: var(--color-success)">OK</span>' : '<span style="color: var(--color-danger)">KO</span>',
+    payload: payloadHex
+  });
+  
+  // Decrypt WASP payload if applicable and CRC is OK
+  if (payloadSize === 33 && crcOK) {
     let lat = dv.getFloat32(4 + 7, true);
     let lon = dv.getFloat32(4 + 11, true);
     let alt = dv.getFloat32(4 + 15, true);
@@ -165,67 +240,75 @@ function parseNectarFrame(frame, payloadSize) {
     let temp = dv.getInt16(4 + 29, true);
     let sats = dv.getUint8(4 + 32);
     
-    // Add to HTML table
-    updateTelemetryTable({
-      ts: tsEpoch,
-      pos: lat.toFixed(5) + ', ' + lon.toFixed(5),
-      alt: alt.toFixed(1) + 'm',
-      spd: spd.toFixed(1) + 'km/h',
-      sat: sats,
-      temp: (temp / 100).toFixed(2) + '°C',
-      bat: vbat + 'mV'
-    });
+    // Update Stats widgets
+    if (statAlt) statAlt.textContent = alt.toFixed(1);
+    if (statSpd) statSpd.textContent = spd.toFixed(1);
+    if (statSat) statSat.textContent = sats;
+    if (statTemp) statTemp.textContent = (temp / 100).toFixed(1);
+    if (statBat) statBat.textContent = (vbat / 1000).toFixed(2);
+    if (statRssi) statRssi.textContent = `${rssi} / ${(snr/4).toFixed(1)}`;
     
-    appendLog(`[BIN] NectarMC Frame | RSSI: ${rssi}dBm | SNR: ${(snr/4).toFixed(2)}dB | Size: 33b`);
-  } else {
-    appendLog(`[BIN] Trame Nectar reçue (Taille: ${payloadSize} octets) - Non-Wasp`);
+    // Update Map position
+    if (window.updateMap) {
+      window.updateMap(lat, lon);
+    }
   }
 }
 
-function updateTelemetryTable(d) {
-  if(lblEmptyTelemetry) lblEmptyTelemetry.style.display = 'none';
+function addNectarFrameToTable(f) {
+  if (lblEmptyTelemetry) lblEmptyTelemetry.style.display = 'none';
   frameIndex++;
   const tr = document.createElement('tr');
   tr.innerHTML = `
     <td>${frameIndex}</td>
-    <td style="font-family: var(--font-mono);">${d.ts}</td>
-    <td style="font-family: var(--font-mono); color: var(--color-cyan);">${d.pos}</td>
-    <td>${d.alt}</td>
-    <td>${d.spd}</td>
-    <td>${d.sat}</td>
-    <td>${d.temp}</td>
-    <td style="color: var(--color-success);">${d.bat}</td>
+    <td style="font-family: var(--font-mono);">${f.ts}</td>
+    <td style="color: var(--color-cyan); font-weight: 600;">${f.tracker}</td>
+    <td>${f.apid}</td>
+    <td>${f.size}</td>
+    <td>${f.rssi} dBm</td>
+    <td>${f.snr} dB</td>
+    <td>${f.crc}</td>
+    <td style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-secondary); text-align: left; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${f.payload}">${f.payload}</td>
   `;
   telemetryTbody.prepend(tr);
   
   if (telemetryTbody.children.length > 50) {
     telemetryTbody.removeChild(telemetryTbody.lastChild);
   }
-  
-  if(d.pos && window.updateMap) {
-    const coords = d.pos.split(',');
-    if(coords.length === 2) {
-      window.updateMap(coords[0].trim(), coords[1].trim());
-    }
-  }
 }
 
 function parseTelemetryText(line) {
   try {
     const parts = line.split('|').map(p => p.trim());
-    let d = { ts: '', pos: '', alt: '', spd: '', sat: '', temp: '', bat: '' };
+    let d = { ts: '', pos: '', alt: '', spd: '', sat: '', temp: '', bat: '', rssi: '--', snr: '--' };
     
     parts.forEach(part => {
       if(part.startsWith('UTC:')) d.ts = part.split(':')[1];
       if(part.startsWith('POS:')) d.pos = part.split('POS:')[1];
-      if(part.startsWith('ALT:')) d.alt = part.split(':')[1];
-      if(part.startsWith('SPD:')) d.spd = part.split(':')[1];
-      if(part.startsWith('T:')) d.temp = part.split(':')[1];
+      if(part.startsWith('ALT:')) d.alt = part.split(':')[1].replace('m','');
+      if(part.startsWith('SPD:')) d.spd = part.split(':')[1].replace('km/h','');
+      if(part.startsWith('T:')) d.temp = part.split(':')[1].replace('°C','');
       if(part.startsWith('SAT:')) d.sat = part.split(':')[1];
-      if(part.startsWith('BAT:')) d.bat = part.split(':')[1];
+      if(part.startsWith('BAT:')) d.bat = part.split(':')[1].replace('mV','');
     });
-    updateTelemetryTable(d);
-  } catch(e) {}
+    
+    // Update Stats widgets
+    if (statAlt && d.alt) statAlt.textContent = parseFloat(d.alt).toFixed(1);
+    if (statSpd && d.spd) statSpd.textContent = parseFloat(d.spd).toFixed(1);
+    if (statSat && d.sat) statSat.textContent = d.sat;
+    if (statTemp && d.temp) statTemp.textContent = parseFloat(d.temp).toFixed(1);
+    if (statBat && d.bat) statBat.textContent = (parseFloat(d.bat) / 1000).toFixed(2);
+    
+    // Update Map
+    if(d.pos && window.updateMap) {
+      const coords = d.pos.split(',');
+      if(coords.length === 2) {
+        window.updateMap(parseFloat(coords[0]), parseFloat(coords[1]));
+      }
+    }
+  } catch(e) {
+    console.error("Text parsing fallback failed:", e);
+  }
 }
 
 function appendLog(msg) {
@@ -274,10 +357,18 @@ document.getElementById('btn-clear-terminal')?.addEventListener('click', () => {
 });
 
 document.getElementById('btn-clear-telemetry')?.addEventListener('click', () => {
-  telemetryTbody.innerHTML = '<tr id="row-empty"><td id="lbl-empty-telemetry" colspan="8" class="text-center text-secondary">No frames received yet. Connect the serial port and power on your trackers.</td></tr>';
+  telemetryTbody.innerHTML = '<tr id="row-empty"><td id="lbl-empty-telemetry" colspan="9" class="text-center text-secondary">No frames received yet. Connect the serial port and power on your trackers.</td></tr>';
   frameIndex = 0;
+  
+  if (statAlt) statAlt.textContent = '--';
+  if (statSpd) statSpd.textContent = '--';
+  if (statSat) statSat.textContent = '--';
+  if (statTemp) statTemp.textContent = '--';
+  if (statBat) statBat.textContent = '--';
+  if (statRssi) statRssi.textContent = '--';
 });
 
+// Radio settings controls
 document.getElementById('btn-read-cfg')?.addEventListener('click', () => { sendData('AT+CFG'); });
 document.getElementById('btn-write-cfg')?.addEventListener('click', () => {
   const freq = document.getElementById('input-freq').value;
@@ -293,4 +384,3 @@ document.getElementById('btn-write-cfg')?.addEventListener('click', () => {
 });
 document.getElementById('btn-save-cfg')?.addEventListener('click', () => { sendData('AT+SAVE'); });
 document.getElementById('btn-reset-cfg')?.addEventListener('click', () => { sendData('AT+RESET'); });
-

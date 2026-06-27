@@ -17,6 +17,14 @@ Les commandes peuvent être envoyées via la **liaison série USB** (115200 baud
 
 ---
 
+## 💾 Sauvegarde en Mémoire Non-Volatile (NVS)
+
+Pour éviter de devoir reconfigurer la carte après chaque redémarrage, les paramètres peuvent être stockés dans la mémoire flash de l'ESP32 (NVS) :
+*   **Sauvegarde automatique** : Certaines commandes de fonctionnement sauvegardent immédiatement leur valeur en NVS dès qu'elles sont appelées (ex: `AT+INTERVAL`, `AT+BINUSB`).
+*   **Sauvegarde manuelle** : Les configurations d'identifiants et de paramètres physiques radio (ex: `AT+FREQ`, `AT+SF`, `AT+BW`, `AT+POWER`, `AT+CRC`, `AT+ID`, `AT+TYPE`, `AT+APID`) s'appliquent immédiatement en mémoire vive (RAM) mais **nécessitent l'appel de la commande `AT+SAVE`** pour être stockées définitivement en NVS.
+
+---
+
 ## 📋 Liste des Commandes AT
 
 ### 1. Système et Diagnostic
@@ -34,12 +42,14 @@ Les commandes peuvent être envoyées via la **liaison série USB** (115200 baud
 *   **Format de réponse** : `+INFO: WASP-TX TRACKER,FW=1.0.0`
 
 #### `AT+CFG` ou `AT+STATUS`
-*   **Rôle** : Affiche un rapport de configuration et de diagnostic.
+*   **Rôle** : Affiche un rapport de configuration et de diagnostic de la station.
 *   **Format de réponse** : Un récapitulatif multiligne, terminé par `OK`.
 
 ---
 
 ### 2. Configuration Physique de la Radio
+
+*Note : Ces commandes modifient les réglages en RAM. Utilisez la commande `AT+SAVE` pour les persister.*
 
 #### `AT+FREQ?`
 *   **Rôle** : Interroge la fréquence active (en MHz).
@@ -47,7 +57,6 @@ Les commandes peuvent être envoyées via la **liaison série USB** (115200 baud
 
 #### `AT+FREQ=<mhz>`
 *   **Rôle** : Modifie la fréquence active (ex: `AT+FREQ=868.500`).
-*   **Contraintes** : La valeur doit être située dans la bande configurée.
 
 #### `AT+SF?`
 *   **Rôle** : Interroge le Spreading Factor LoRa.
@@ -81,6 +90,8 @@ Les commandes peuvent être envoyées via la **liaison série USB** (115200 baud
 
 ### 3. Identifiants et Télémétrie
 
+*Note : Ces commandes modifient les réglages en RAM. Utilisez la commande `AT+SAVE` pour les persister (sauf AT+INTERVAL qui est auto-sauvegardée).*
+
 #### `AT+ID?`
 *   **Rôle** : Interroge l'identifiant du tracker (SSID Num).
 *   **Format de réponse** : `+ID: <id>`.
@@ -108,25 +119,30 @@ Les commandes peuvent être envoyées via la **liaison série USB** (115200 baud
 
 #### `AT+INTERVAL=<sec>`
 *   **Rôle** : Modifie l'intervalle d'envoi (de 1 à 3600 secondes).
+*   **Sauvegarde NVS** : **Automatique** (sauvegardé immédiatement sans nécessiter `AT+SAVE`).
 
 ---
 
 ### 4. Paramètres de Sortie et Stockage
 
 #### `AT+DEBUG?`
-*   **Rôle** : Interroge le statut d'activation des logs texte clairs (`[TX]` et `[HEX]`).
+*   **Rôle** : Interroge le statut d'activation des logs texte clairs (`[TX]` et `[HEX]`). *(Désormais déprécié, le mode debug textuel ayant été supprimé du firmware).*
 
 #### `AT+DEBUG=<0|1>`
-*   **Rôle** : Active (1) ou désactive (0) les logs texte explicites sur le port USB.
+*   **Rôle** : Active (1) ou désactive (0) les logs texte explicites sur le port USB. *(Déprécié, n'a plus d'effet car les trames binaires sont émises directement).*
+*   **Sauvegarde NVS** : **Automatique** (sauvegardé immédiatement).
 
 #### `AT+BINUSB?`
 *   **Rôle** : Interroge l'activation de la sortie binaire.
 
 #### `AT+BINUSB=<0|1>`
 *   **Rôle** : Active (1) ou désactive (0) l'émission des trames binaires NectarMC brutes sur le port USB.
+*   **Sauvegarde NVS** : **Automatique** (sauvegardé immédiatement sans nécessiter `AT+SAVE`).
 
 #### `AT+SAVE`
-*   **Rôle** : Sauvegarde immédiatement tous les réglages actifs dans la mémoire Flash non-volatile (NVS).
+*   **Rôle** : Sauvegarde manuellement tous les réglages actifs modifiés (Radio, ID, APID) dans la mémoire Flash non-volatile (NVS).
+*   **Format de réponse** : `OK`
 
 #### `AT+RESET`
-*   **Rôle** : Restaure les paramètres par défaut et redémarre la carte.
+*   **Rôle** : Restaure les paramètres par défaut d'usine (y compris la NVS) et redémarre la carte.
+

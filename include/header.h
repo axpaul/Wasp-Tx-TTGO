@@ -69,6 +69,10 @@
 // Note : Consomme environ 1MB de Flash et 150KB de RAM. Désactivé par défaut.
 #define ENABLE_BLUETOOTH        1
 
+// Activer l'envoi de la trame binaire brute sur le port USB Serial (pour NectarMC)
+// Désactivé par défaut pour éviter d'avoir des caractères "parasites" lisibles comme du texte
+#define ENABLE_USB_BINARY       0
+
 #if ENABLE_BLUETOOTH
 #include "BluetoothSerial.h"
 extern BluetoothSerial SerialBT;

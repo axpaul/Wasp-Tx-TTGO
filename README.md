@@ -1,60 +1,135 @@
-# Wasp-TX (Wireless Altitude & Status Positioning)
+# Wasp-TX : Wireless Altitude & Status Positioning 
 
-Wasp-TX est un projet de tracker GPS et télémétrie LoRa conçu pour s'intégrer avec l'écosystème **NectarMC**. Il tourne principalement sur les cartes **LILYGO TTGO T-Beam** (V1.1 et V1.2).
+**Wasp-TX** est un firmware open-source destiné au suivi télémétrique par radiofréquence (LoRa) et GNSS, conçu pour les applications de **rocketry amateur**. Il permet l'acquisition de données de positionnement et leur transmission vers une station sol.
+Ce firmware est développé pour les plateformes [LilyGO TTGO T-Beam](https://lilygo.cc/en-us/products/t-beam-meshtastic?variant=51708927312053)
+Wasp-TX est intégré à l'écosystème **NectarMC** pour le traitement et la visualisation des données :
 
-## Fonctionnalités Principales
-- Acquisition GPS (Latitude, Longitude, Altitude, Vitesse, Cap, Satellites).
-- Télémétrie de la puce (Température, Tension Batterie).
-- Transmission radio via module LoRa intégré (SX1262 ou SX1276).
-- Format de trame binaire natif compatible NectarMC (Protocole propriétaire robuste).
-- Configuration dynamique persistante via Commandes AT par le port Série.
-- Tableau de bord en ligne ultra complet avec Outil de Flash ESP, Console Série, Télémétrie Live et Carte interactive GPS.
+* **Réception (Liaison descendante) :** Compatible avec la station **[Nectar-RX](https://github.com/axpaul/Nectar-RxStation-LoRa32)**, configurée pour la capture des trames LoRa.
+* **Traitement et visualisation :** Intégration avec la plateforme **[NectarMC](https://github.com/mlavardin/NectarMC)** pour le suivi en temps réel de la trajectoire et l'analyse post-vol.
 
-## Web Control Center
-Un tableau de bord complet et statique (HTML/CSS/JS) est disponible et hébergé directement via GitHub Pages pour permettre une configuration et un suivi simplifiés :
-👉 **[Accéder au Web Control Center Wasp-TX](https://axpaul.github.io/Wasp-TxTracker-TTGO/docs/)**
+---
 
-Ce tableau de bord permet de :
-- **Flasher le firmware** directement depuis Chrome/Edge (via ESP Web Tools).
-- **Configurer le tracker** en temps réel via une console et des raccourcis de commandes AT.
-- **Suivre la télémétrie en direct** sur une carte et un tableau de données, grâce à l'API Web Serial.
+## Fonctionnalités principales
 
-## Format de Trame Binaire (32 Octets)
+* **Géolocalisation** : Lecture en temps réel des coordonnées GPS, de l'altitude, de la vitesse, du cap et du temps UTC (U-blox NEO-M8N / NEO-6M).
+* **Télémétrie LoRa (Format Nectar)** : Envoi périodique des trames télémétriques compressées et sécurisées par CRC.
+* **Interface de configuration AT** :
+  * Accessible via la liaison USB Série et via **Bluetooth Classique (SPP)**.
+  * Commandes AT riches pour paramétrer la radio, l'identifiant du tracker, le type, la fréquence d'envoi, etc.
+  * Sauvegarde automatique et persistante des réglages dans la mémoire flash non volatile (NVS).
 
-Pour garantir une efficacité spectrale maximale et une longue portée (Low Power Wide Area Network), Wasp-TX génère une payload LoRa ultra-compressée de **32 octets** (`wasp_payload_t`), qui est transmise sur les ondes et par liaison Série USB/Bluetooth.
+---
 
-### Structure `wasp_payload_t`
+## Aperçu du Matériel
 
-La payload LoRa brute (sans les headers Nectar additionnels ajoutés côté USB) est packée à l'octet près (`#pragma pack(1)`) :
+Voici les vues de la carte de développement ainsi que son brochage (Pinout) et ses dimensions :
 
-| Offset | Taille (octets) | Type       | Nom        | Description |
-|--------|-----------------|------------|------------|-------------|
-| 0      | 1               | `uint8_t`  | `id`       | Numéro de l'ID du Tracker (SSID Num) |
-| 1      | 1               | `uint8_t`  | `apid`     | Application Process Identifier |
-| 2      | 1               | `uint8_t`  | `type`     | Type de Tracker (SSID Type) |
-| 3      | 4               | `uint32_t` | `utc`      | Horodatage Unix Epoch (Timestamp GPS) |
-| 7      | 4               | `float`    | `lat`      | Latitude (encodage binaire IEEE 754) |
-| 11     | 4               | `float`    | `lon`      | Longitude (encodage binaire IEEE 754) |
-| 15     | 4               | `float`    | `alt`      | Altitude en mètres |
-| 19     | 4               | `float`    | `spd`      | Vitesse en km/h |
-| 23     | 4               | `float`    | `cog`      | Cap (Course Over Ground) en degrés |
-| 27     | 2               | `uint16_t` | `vbat`     | Tension de la batterie en millivolts (mV) |
-| 29     | 2               | `int16_t`  | `temp`     | Température interne (en 1/100 °C) |
-| 31     | 1               | `uint8_t`  | `status`   | Bitmask d'états (ex: Bit 0 = Fix GPS Valide) |
-| 32     | 1               | `uint8_t`  | `sats`     | Nombre de satellites GPS accrochés |
-| **TOTAL**| **33 octets**   |            |            | *(Note: La structure a été mise à jour à 33 octets avec les ajouts de champs au fil du développement)* |
+<p align="center">
+  <img src="Image/pin-diagram_1024x1024.jpg" alt="Pinout Diagram" width="500" />
+  <br>
+  <em>Brochage de la carte TTGO T-BEAM</em>
+</p>
+<p align="center">
+  <img src="Image/product-size_1024x1024.webp" alt="Board Dimensions" width="500" />
+  <br>
+  <em>Format de la carte TTGO T-BEAM</em>
+</p>
 
-*(Correction de la taille : La structure actuelle fait exactement 33 octets d'après le code C++)*
+- **[Télécharger  le Schéma PDF de la TTGO TBEAM V1.1](LilyGo_TBeam_V1.1.pdf)**
+- **[Télécharger  le Schéma PDF de la TTGO TBEAM V1.2](LilyGo_TBeam_V1.2.pdf)**
 
-### Encapsulation NectarMC (Liaison Série / USB)
-Lors de l'envoi de la télémétrie par le port USB vers le Web Control Center (ou vers NectarMC), la payload de 33 octets ci-dessus est encapsulée dans le protocole de transport NectarMC. La trame finale transmise (plus de 40 octets) inclut :
-1. **Magic Word** (1 octet)
-2. **ID Mission** (2 octets)
-3. **Longueur de la payload** (1 octet)
-4. **La Payload Wasp (`wasp_payload_t`)** (33 octets)
-5. **Métriques Radio locales** (RSSI, SNR) (2 octets)
-6. **Horodatage Local Epoch** (4 octets)
-7. **CRC16-CCITT** (2 octets)
-8. **Saut de Ligne `\n`** (1 octet)
+---
 
-C'est cette trame binaire complète que le script JavaScript `serial.js` ou l'interface NectarMC parse pour afficher la télémétrie fluide en temps réel.
+## Configuration Matérielle (LilyGO T-Beam)
+
+Le code s'adapte automatiquement selon l'environnement de compilation choisi :
+* **T-Beam v1.1** : Utilise la puce d'alimentation AXP192. Active automatiquement l'alimentation du GPS (LDO3 @ 3.3V) et du module LoRa (LDO2 @ 3.3V), ainsi que l'ADC de mesure de batterie et la détection d'accu.
+* **T-Beam v1.2** : Utilise la puce d'alimentation AXP2101. Active l'alimentation du GPS (ALDO3 @ 3.3V) et du LoRa (ALDO2 @ 3.3V).
+
+---
+
+## External Libraries
+
+Les dépendances du projet sont gérées via `platformio.ini`. Les bibliothèques suivantes sont requises pour le fonctionnement du firmware :
+
+| Library | Version | Purpose |
+| :--- | :--- | :--- |
+| **RadioLib** | `^6.0.0` | Gestion de la communication radio LoRa |
+| **ESP32Time** | `^2.0.0` | Gestion de l'horloge interne (RTC) |
+| **XPowersLib** | `^0.2.6` | Gestion de l'alimentation (PMU AXP192/AXP2101) |
+| **TinyGPSPlus** | `^1.0.3` | Décodage des trames de données GPS |
+
+---
+
+## Compilation et Téléversement (PlatformIO)
+
+Ouvrez le projet dans VS Code avec l'extension PlatformIO, puis sélectionnez l'environnement approprié :
+
+### 1. Pour la T-Beam v1.1 (AXP192)
+```bash
+# Compilation
+pio run -e tbeam_v1_1
+
+# Téléversement et moniteur série
+pio run -e tbeam_v1_1 -t upload -t monitor
+```
+
+### 2. Pour la T-Beam v1.2 (AXP2101)
+```bash
+# Compilation
+pio run -e tbeam_v1_2
+
+# Téléversement et moniteur série
+pio run -e tbeam_v1_2 -t upload -t monitor
+```
+
+---
+
+## Commandes AT Disponibles
+
+Les commandes AT peuvent être envoyées via USB Série (`115200` bauds) ou via le Bluetooth (nom Bluetooth par défaut : `Wasp-TX-<ID>`). Elles se terminent par un retour à la ligne `\r\n`.
+
+| Commande | Action | Exemple de réponse / Comportement |
+| --- | --- | --- |
+| `AT` | Test de communication | `OK` |
+| `AT+HELP` ou `AT?` | Affiche l'aide et les commandes | *(Liste des commandes)* |
+| `AT+VER` ou `AT+INFO` | Affiche la version du firmware | `+INFO: WASP-TX TRACKER,FW=1.0.0` |
+| `AT+CFG` ou `AT+STATUS` | Affiche la configuration détaillée | *(Tableau de configuration)* |
+| `AT+ID=<0-255>` | Règle l'identifiant du tracker (SSID Num) | `OK` |
+| `AT+ID?` | Récupère l'identifiant du tracker | `+ID: 1` |
+| `AT+TYPE=<0-3>` | Règle le type (0=FX, 1=MF, 2=BALLOON, 3=OTHER) | `OK` |
+| `AT+TYPE?` | Récupère le type de tracker | `+TYPE: 2` |
+| `AT+INTERVAL=<sec>` | Règle l'intervalle d'envoi en secondes (1-3600) | `OK` *(Sauvegarde automatique)* |
+| `AT+INTERVAL?` | Récupère l'intervalle d'envoi | `+INTERVAL: 1` |
+| `AT+FREQ=<mhz>` | Règle la fréquence active (ex: `868.500`) | `OK` |
+| `AT+FREQ?` | Récupère la fréquence active | `+FREQ: 868.000` |
+| `AT+SF=<6-12>` | Règle le Spreading Factor LoRa | `OK` |
+| `AT+SF?` | Récupère le Spreading Factor LoRa | `+SF: 9` |
+| `AT+BW=<khz>` | Règle la bande passante LoRa | `OK` |
+| `AT+BW?` | Récupère la bande passante LoRa | `+BW: 125.0` |
+| `AT+POWER=<dbm>` | Règle la puissance d'émission LoRa (2-20) | `OK` |
+| `AT+POWER?` | Récupère la puissance d'émission LoRa | `+POWER: 14` |
+| `AT+CRC=<0\|1>` | Active (1) ou désactive (0) le CRC LoRa | `OK` |
+| `AT+CRC?` | Récupère le statut du CRC | `+CRC: 1,0` (CRC On, Mode CCITT) |
+| `AT+DEBUG=<0\|1>` | Active (1) ou désactive (0) les logs texte `[TX]` / `[HEX]` | `OK` *(Sauvegarde automatique)* |
+| `AT+DEBUG?` | Récupère le statut des logs texte | `+DEBUG: 0` |
+| `AT+BINUSB=<0\|1>` | Active (1) ou désactive (0) la trame binaire brute USB | `OK` *(Sauvegarde automatique)* |
+| `AT+BINUSB?` | Récupère le statut de la trame brute USB | `+BINUSB: 0` |
+| `AT+SAVE` | Sauvegarde manuellement les réglages en NVS | `OK` |
+| `AT+RESET` | Réinitialise les réglages d'usine et redémarre | `OK` |
+
+---
+
+## Tests Unitaires (Framework Unity)
+
+Le firmware inclut une suite de tests unitaires écrits avec le framework **Unity** de PlatformIO. Ces tests permettent de vérifier la cohérence des structures de données, la validité des constantes par défaut et le calcul du CRC16.
+
+Pour compiler et exécuter les tests unitaires directement sur votre carte TTGO T-Beam connectée :
+
+```bash
+# Pour tester la version T-Beam v1.1 (AXP192)
+pio test -e tbeam_v1_1
+
+# Pour tester la version T-Beam v1.2 (AXP2101)
+pio test -e tbeam_v1_2
+```

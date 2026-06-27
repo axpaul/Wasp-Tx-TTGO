@@ -225,17 +225,17 @@ function parseNectarFrame(frame, payloadSize, hasTimestamp) {
     payload: payloadHex
   });
   
-  // Decrypt WASP payload if applicable (optimized to exactly 32 bytes!) and CRC is OK
-  if (payloadSize === 32 && crcOK) {
-    let lat = dv.getFloat32(4 + 7, true);
-    let lon = dv.getFloat32(4 + 11, true);
-    let alt = dv.getFloat32(4 + 15, true);
-    let spd = dv.getFloat32(4 + 19, true);
-    let vbat = dv.getUint16(4 + 27, true);
-    let temp = dv.getInt16(4 + 29, true);
+  // Decrypt WASP payload if applicable (29 bytes after removing the 3 header bytes) and CRC is OK
+  if (payloadSize === 29 && crcOK) {
+    let lat = dv.getFloat32(4 + 4, true);  // Offset 4 in payload (utc is 0)
+    let lon = dv.getFloat32(4 + 8, true);  // Offset 8 in payload
+    let alt = dv.getFloat32(4 + 12, true); // Offset 12 in payload
+    let spd = dv.getFloat32(4 + 16, true); // Offset 16 in payload
+    let vbat = dv.getUint16(4 + 24, true); // Offset 24 in payload
+    let temp = dv.getInt16(4 + 26, true); // Offset 26 in payload
     
-    // Status byte at offset 31 has GPS fix (bit 7) and Sats (bits 0-4)
-    let statusByte = dv.getUint8(4 + 31);
+    // Status byte at offset 28 in payload has GPS fix (bit 7) and Sats (bits 0-4)
+    let statusByte = dv.getUint8(4 + 28);
     let sats = statusByte & 0x1F;
     let gpsFix = (statusByte >> 7) & 0x01;
     

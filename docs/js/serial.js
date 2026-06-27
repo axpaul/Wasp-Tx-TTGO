@@ -51,6 +51,14 @@ btnConnect.addEventListener('click', async () => {
       if(el.id !== 'board-select' && !el.closest('esp-web-install-button')) el.disabled = false;
     });
 
+    const portInfo = port.getInfo();
+    let portDesc = "Connecté";
+    if (portInfo.usbVendorId !== undefined) {
+      portDesc = `Périphérique USB (VID: 0x${portInfo.usbVendorId.toString(16).toUpperCase()}, PID: 0x${portInfo.usbProductId.toString(16).toUpperCase()})`;
+    }
+    const lblPortName = document.getElementById('lbl-port-name');
+    if (lblPortName) lblPortName.textContent = portDesc;
+
     keepReading = true;
     appendLog("--- Connexion Série Établie ---");
     readLoop();
@@ -81,6 +89,9 @@ btnDisconnect.addEventListener('click', async () => {
   document.querySelectorAll('.config-panel input, .config-panel select, .config-panel button').forEach(el => {
     if(el.id !== 'board-select' && !el.closest('esp-web-install-button')) el.disabled = true;
   });
+  
+  const lblPortName = document.getElementById('lbl-port-name');
+  if (lblPortName) lblPortName.textContent = 'Aucun appareil connecté';
   
   appendLog("--- Déconnecté ---");
 });

@@ -2,6 +2,7 @@ let port;
 let reader;
 let writer;
 let keepReading = true;
+let frameIndex = 0;
 
 const btnConnect = document.getElementById('btn-connect');
 const btnDisconnect = document.getElementById('btn-disconnect');
@@ -12,12 +13,8 @@ const btnSend = document.getElementById('btn-send');
 const terminalForm = document.getElementById('terminal-form');
 const btnAtCmds = document.querySelectorAll('.btn-at');
 
-// Telemetry Elements
-const teleAlt = document.getElementById('tele-alt');
-const teleSpd = document.getElementById('tele-spd');
-const teleTemp = document.getElementById('tele-temp');
-const teleSat = document.getElementById('tele-sat');
-const teleBat = document.getElementById('tele-bat');
+const telemetryTbody = document.getElementById('telemetry-tbody');
+const lblEmptyTelemetry = document.getElementById('row-empty');
 
 // Check for Web Serial API support
 if (!("serial" in navigator)) {
@@ -146,25 +143,61 @@ btnAtCmds.forEach(btn => {
 
 // Parsing telemetry
 function parseTelemetry(line) {
+  // [TX] UTC:1782586735 | POS:43.60014, 1.47430 | ALT:201.5m | SPD:0.1km/h | COG:0.0° | T:38.10°C | SAT:11 | BAT:0mV | STATUS:0x01
   if(line.startsWith('[TX]')) {
     try {
+      if(lblEmptyTelemetry) lblEmptyTelemetry.style.display = 'none';
+      
       const parts = line.split('|').map(p => p.trim());
+      let d = { ts: '', pos: '', alt: '', spd: '', sat: '', temp: '', bat: '' };
+      
       parts.forEach(part => {
-        if(part.startsWith('ALT:')) { if(teleAlt) teleAlt.textContent = part.split(':')[1].replace('m',''); }
-        if(part.startsWith('SPD:')) { if(teleSpd) teleSpd.textContent = part.split(':')[1].replace('km/h',''); }
-        if(part.startsWith('T:')) { if(teleTemp) teleTemp.textContent = part.split(':')[1].replace('°C',''); }
-        if(part.startsWith('SAT:')) { if(teleSat) teleSat.textContent = part.split(':')[1]; }
-        if(part.startsWith('BAT:')) { if(teleBat) teleBat.textContent = part.split(':')[1].replace('mV',''); }
-        
-        if(part.startsWith('POS:')) {
-          const coords = part.split(':')[1].split(',');
-          if(coords.length === 2 && window.updateMap) {
-            window.updateMap(coords[0].trim(), coords[1].trim());
-          }
-        }
+        if(part.startsWith('UTC:')) d.ts = part.split(':')[1];
+        if(part.startsWith('POS:')) d.pos = part.split('POS:')[1];
+        if(part.startsWith('ALT:')) d.alt = part.split(':')[1];
+        if(part.startsWith('SPD:')) d.spd = part.split(':')[1];
+        if(part.startsWith('T:')) d.temp = part.split(':')[1];
+        if(part.startsWith('SAT:')) d.sat = part.split(':')[1];
+        if(part.startsWith('BAT:')) d.bat = part.split(':')[1];
       });
+      
+      frameIndex++;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${frameIndex}</td>
+        <td style="font-family: var(--font-mono);">${d.ts}</td>
+        <td style="font-family: var(--font-mono); color: var(--color-cyan);">${d.pos}</td>
+        <td>${d.alt}</td>
+        <td>${d.spd}</td>
+        <td>${d.sat}</td>
+        <td>${d.temp}</td>
+        <td style="color: var(--color-success);">${d.bat}</td>
+      `;
+      telemetryTbody.prepend(tr);
+      
+      // limit rows
+      if (telemetryTbody.children.length > 50) {
+        telemetryTbody.removeChild(telemetryTbody.lastChild);
+      }
+      
+      // Update Map
+      if(d.pos && window.updateMap) {
+        const coords = d.pos.split(',');
+        if(coords.length === 2) {
+          window.updateMap(coords[0].trim(), coords[1].trim());
+        }
+      }
     } catch(e) {
       console.error('Parse err:', e);
     }
   }
 }
+
+document.getElementById('btn-clear-terminal')?.addEventListener('click', () => {
+  terminalLogs.innerHTML = '';
+});
+
+document.getElementById('btn-clear-telemetry')?.addEventListener('click', () => {
+  telemetryTbody.innerHTML = '<tr id="row-empty"><td id="lbl-empty-telemetry" colspan="8" class="text-center text-secondary">No frames received yet. Connect the serial port and power on your trackers.</td></tr>';
+  frameIndex = 0;
+});

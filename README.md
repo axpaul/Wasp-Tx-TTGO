@@ -85,19 +85,16 @@ Les commandes AT peuvent être envoyées via USB Série (`115200` bauds) ou via 
 
 ---
 
-## Test et Validation automatique
+## Tests Unitaires (Framework Unity)
 
-Un script de test en Python est fourni dans le dossier `tools/` pour valider automatiquement le fonctionnement de toutes les commandes AT.
+Le firmware inclut une suite de tests unitaires écrits avec le framework **Unity** de PlatformIO. Ces tests permettent de vérifier la cohérence des structures de données, la validité des constantes par défaut et le calcul du CRC16.
 
-### Prérequis
-Installer la bibliothèque `pyserial` sur votre PC :
+Pour compiler et exécuter les tests unitaires directement sur votre carte TTGO T-Beam connectée :
+
 ```bash
-pip install pyserial
-```
+# Pour tester la version T-Beam v1.1 (AXP192)
+pio test -e tbeam_v1_1
 
-### Exécution du test
-Exécutez le script en passant le port COM de votre carte en paramètre :
-```bash
-python tools/test_tracker.py COM3
+# Pour tester la version T-Beam v1.2 (AXP2101)
+pio test -e tbeam_v1_2
 ```
-*(Remplacez `COM3` par le port correspondant sur votre système, ex: `/dev/ttyUSB0` sur Linux).*

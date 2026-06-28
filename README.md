@@ -86,45 +86,20 @@ graph TD
     main --> at
 ```
 
-### 📡 Contextes d'Exécution, Priorités et Synchronisation (FreeRTOS)
-Le firmware s'exécute de façon asynchrone sur l'ESP32 en combinant des interruptions matérielles (ISR), la boucle d'exécution principale Arduino, et une tâche FreeRTOS dédiée à la radio, synchronisées par des files d'attente (Queues) et des sémaphores (Mutex).
+### 📡 Contextes d'Exécution et Priorités (FreeRTOS)
+Le firmware s'exécute de façon asynchrone sur l'ESP32 en combinant des interruptions matérielles (ISR), la boucle principale, et une tâche d'émission LoRa asynchrone.
 
 ```mermaid
 graph TD
-    %% Contextes d'exécution
-    subgraph Contextes ["Contextes d'Exécution & Priorités"]
-        isr["⏰ ISR Hardware (Timer 0)<br><b>Priorité : Interruption Matérielle (ISR)</b>"]
-        loop["🔄 Main loop() (loopTask)<br><b>Priorité : 1</b> (Core 1)"]
-        task["📡 Tâche LoRaTX (loraTask)<br><b>Priorité : 1</b> (FreeRTOS Task)"]
-    end
+    %% Flux de contrôle
+    ISR["⏰ Interruption Timer (ISR)"] -->|Drapeau (send_trigger)| Loop["🔄 Boucle principale (loopTask, Prio 1)"]
+    Loop -->|Queue (gpsQueue)| Task["📡 Tâche LoRa (loraTask, Prio 1)"]
+    Task -->|Mutex (radioMutex)| Radio["📻 Radio LoRa SX1276 (SPI)"]
 
-    %% Mécanismes de synchronisation
-    subgraph Sync ["Synchronisation & IPC"]
-        trigger["volatile bool send_trigger"]
-        queue["📥 Queue: gpsQueue<br><i>(Capacité : 5 × wasp_payload_t)</i>"]
-        mutex["🔒 Mutex: radioMutex<br><i>(Accès exclusif SPI Radio)</i>"]
-    end
-
-    %% Flux de contrôle et données
-    isr -->|Déclenche l'alarme| trigger
-    loop -->|Lit & acquitte| trigger
-    loop -->|Assemble & pousse la trame| queue
-    queue -->|Bloque / Réveille la tâche| task
-    task -->|Prend / Libère le Mutex| mutex
-
-    %% Interactions physiques
-    subgraph Hardware ["Périphériques & Matériel"]
-        gps[("🛰️ GPS UART1")]
-        btn[("🔘 Boutons (GPIO 38 / PEKEY)")]
-        lora[("📻 Radio LoRa SX1276 (SPI)")]
-        led[("🔵 LED Bleue (GPIO 4)")]
-    end
-
-    loop -->|Lecture des trames NMEA| gps
-    loop -->|Lecture clics et durée| btn
-    task -->|Flash LED (1 ou 2 fois selon mode)| led
-    task -->|Émission RF| lora
-    mutex -.->|Protège| lora
+    %% Entrées/Sorties physiques
+    Loop -->|Lit NMEA| GPS["🛰️ GPS UART"]
+    Loop -->|Lit Clics/Extinction| Buttons["🔘 Boutons (GPIO 38 / PEKEY)"]
+    Task -->|Flash (1 ou 2 fois)| LED["🔵 LED Bleue (GPIO 4)"]
 ```
 
 ### Rôle et contenu de chaque fichier :

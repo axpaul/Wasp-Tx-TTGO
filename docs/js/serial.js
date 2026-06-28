@@ -261,10 +261,11 @@ function parseNectarFrame(frame, payloadSize, hasTimestamp) {
     let vbat = dv.getUint16(4 + 24, true); // Offset 24 in payload
     let temp = dv.getInt16(4 + 26, true); // Offset 26 in payload
     
-    // Status byte at offset 28 in payload has GPS fix (bit 7) and Sats (bits 0-4)
+    // Status byte at offset 28 in payload has GPS fix (bit 7), Mode (bit 5) and Sats (bits 0-4)
     let statusByte = dv.getUint8(4 + 28);
     let sats = statusByte & 0x1F;
     let gpsFix = (statusByte >> 7) & 0x01;
+    let mode = (statusByte >> 5) & 0x01; // 0 = Vol (Normal), 1 = Eco
     
     // Formatter coordonnées, altitude et batterie
     latVal = lat.toFixed(6);
@@ -281,11 +282,12 @@ function parseNectarFrame(frame, payloadSize, hasTimestamp) {
     
     if (statFix) {
       const lang = localStorage.getItem('wasp_lang') || 'fr';
+      let modeText = mode === 1 ? (lang === 'en' ? 'Eco' : 'Éco') : (lang === 'en' ? 'Flight' : 'Vol');
       if (gpsFix) {
-        statFix.textContent = lang === 'en' ? 'Valid' : 'Valide';
+        statFix.textContent = `${lang === 'en' ? 'Valid' : 'Valide'} (${modeText})`;
         statFix.style.color = '#10b981'; // Green color for valid fix
       } else {
-        statFix.textContent = lang === 'en' ? 'No Fix' : 'Aucun Fix';
+        statFix.textContent = `${lang === 'en' ? 'No Fix' : 'Aucun Fix'} (${modeText})`;
         statFix.style.color = '#ef4444'; // Red color for no fix
       }
     }
@@ -304,7 +306,8 @@ function parseNectarFrame(frame, payloadSize, hasTimestamp) {
         cog: cog,
         gpsFix: gpsFix,
         sats: sats,
-        time: timeStr
+        time: timeStr,
+        mode: mode
       });
     }
   }

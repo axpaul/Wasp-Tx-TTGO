@@ -124,6 +124,8 @@ extern QueueHandle_t gpsQueue;
 extern SemaphoreHandle_t radioMutex;
 extern LoRaConfig activeConfig;
 extern volatile bool send_trigger;
+extern volatile uint8_t currentMode;
+extern hw_timer_t *timer;
 
 // ============================================================================
 // 7. DECLARATIONS DE FONCTIONS
@@ -132,9 +134,11 @@ void loadLoRaConfig();
 void saveLoRaConfig();
 void resetLoRaConfig();
 void initRadio();
+void loraTask(void *pvParameters);
 void send_telemetry();
 void checkSerialCommands();
 void handleConfigCommand(const char* cmd, Stream& responseStream);
+void updateTimerInterval(uint16_t seconds);
 
 // Gestion de l'énergie (PMU)
 bool initPMU();
@@ -144,6 +148,7 @@ void setupPMUInterrupts();
 bool checkPMUPowerButton();
 void gracefulShutdown();
 void enterStandbyMode();
+void configureMode(uint8_t mode);
 
 // Fonctions utilitaires
 uint16_t calculate_crc16(const uint8_t *data, size_t len);

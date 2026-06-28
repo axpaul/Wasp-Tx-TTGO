@@ -156,10 +156,43 @@ void gracefulShutdown() {
 
     // Sûreté : Si connecté en USB, PMU.shutdown() ne coupera pas physiquement le circuit
     // car le rail VBUS USB maintient la tension. On bascule l'ESP32 en sommeil profond à la place.
-    Serial.println("[SYSTEM] Alimentation USB détectée (shutdown indisponible). Entrée en Deep Sleep...");
+    Serial.println("[SYSTEM] Alimentation USB detectee (shutdown indisponible). Entree en Deep Sleep...");
     Serial.flush();
     
     // Configurer le réveil par pression sur PEKEY ou User Button si nécessaire, ou dormir indéfiniment
+    esp_deep_sleep_start();
+}
+
+/**
+ * @brief Coupe proprement les peripheriques LoRa/GPS et bascule l'ESP32 en Deep Sleep (reveil par bouton utilisateur).
+ */
+void enterStandbyMode() {
+    Serial.println("\n[SYSTEM] Bouton utilisateur presse. Entree en veille Standby (Deep Sleep)...");
+    Serial.flush();
+    
+    // Clignotement lent pour notifier la mise en veille
+    pinMode(4, OUTPUT);
+    digitalWrite(4, LOW);  // LED allumee (actif bas)
+    delay(400);
+    digitalWrite(4, HIGH); // LED eteinte
+    
+    // 1. Mettre la puce radio en sommeil profond
+    radio.sleep();
+
+    // 2. Couper le GPS et la radio via le PMU pour maximiser l'economie d'energie
+#if defined(WASP_BOARD_V1_2)
+    XPowersLibInterface *pPMU = &PMU;
+    pPMU->disablePowerOutput(XPOWERS_ALDO3); // GPS
+    pPMU->disablePowerOutput(XPOWERS_ALDO2); // LoRa
+#else
+    PMU.disableLDO3(); // GPS
+    PMU.disableLDO2(); // LoRa
+#endif
+
+    // 3. Configurer le reveil de l'ESP32 par appui sur le bouton utilisateur (GPIO 38)
+    esp_sleep_enable_ext0_wakeup(GPIO_NUM_38, 0); // Reveil sur niveau bas (0 = presse)
+
+    // 4. Passer en sommeil profond
     esp_deep_sleep_start();
 }
 

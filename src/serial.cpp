@@ -113,3 +113,49 @@ void outputTelemetryFrame(const wasp_payload_t& packet) {
     // On passe le reste des données à partir de l'octet 3 (utc) pour éviter la duplication des en-têtes
     sendNectarFrame(packet.type, packet.id, packet.apid, (const uint8_t*)&packet + 3, sizeof(wasp_payload_t) - 3, 0, 0);
 }
+
+/**
+ * @brief Assemble et envoie une trame de telemetrie (GPS + Systeme).
+ */
+void send_telemetry() {
+    wasp_payload_t packet;
+    
+    // Remplissage de l'en-tete de routage
+    packet.id = activeConfig.trackerId; 
+    packet.apid = activeConfig.apid; 
+    packet.type = activeConfig.trackerType;
+    packet.utc = (uint32_t)rtc.getEpoch();
+    
+    // Remplissage des coordonnees GPS (conversion float en tableau d'octets)
+    union FloatConverter { float f; uint8_t b[4]; };
+    FloatConverter conv;
+    
+    conv.f = (float)gps.location.lat();    memcpy(packet.lat, conv.b, 4);
+    conv.f = (float)gps.location.lng();    memcpy(packet.lon, conv.b, 4);
+    conv.f = (float)gps.altitude.meters(); memcpy(packet.alt, conv.b, 4);
+    conv.f = (float)gps.speed.kmph();      memcpy(packet.spd, conv.b, 4);
+    conv.f = (float)gps.course.deg();      memcpy(packet.cog, conv.b, 4);
+
+    // Mesures du PMU (tension batterie et temperature interne)
+    packet.vbat = getPMUBatteryVoltage();
+    
+    float internalTemp = getPMUTemperature();
+    packet.temp = (int16_t)(internalTemp * 100.0f); // Conversion en 1/100 °C
+    
+    // Construction du bitmask d'etat
+    packet.status = (uint8_t)(gps.satellites.value() & 0x1F); // Bits 0-4: Sats
+    if (gps.location.isValid()) {
+        packet.status |= (1 << 7); // Bit 7: GPS Fix valide
+    }
+    if (currentMode == 1) {
+        packet.status |= (1 << 5); // Bit 5: Mode Eco actif
+    }
+    
+    // Traiter et emettre les donnees de telemetrie sur les ports serie (USB/Bluetooth)
+    outputTelemetryFrame(packet);
+
+    // Envoi de la telemetrie dans la file de transmission radio LoRa
+    if (gpsQueue != NULL) {
+        xQueueSend(gpsQueue, &packet, 0);
+    }
+}

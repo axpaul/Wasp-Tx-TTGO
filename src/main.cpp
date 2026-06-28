@@ -18,6 +18,7 @@ QueueHandle_t gpsQueue = NULL;
 SemaphoreHandle_t radioMutex = NULL;
 hw_timer_t *timer = NULL;
 volatile bool send_trigger = false;
+volatile uint8_t currentMode = 0; // 0 = Vol (Normal), 1 = Eco (Lent)
 
 #if ENABLE_BLUETOOTH
 BluetoothSerial SerialBT;
@@ -27,30 +28,6 @@ BluetoothSerial SerialBT;
 
 void IRAM_ATTR onTimer() {
     send_trigger = true;
-}
-
-/**
- * @brief Tâche FreeRTOS pour l'envoi asynchrone des trames LoRa.
- */
-void loraTask(void *pvParameters) {
-    wasp_payload_t data;
-    while (true) {
-        if (xQueueReceive(gpsQueue, &data, portMAX_DELAY) == pdPASS) {
-            int state = RADIOLIB_ERR_UNKNOWN;
-            
-            // Attente du sémaphore pour utiliser le bus SPI de la radio
-            if (xSemaphoreTake(radioMutex, portMAX_DELAY) == pdTRUE) {
-                state = radio.transmit((uint8_t*)&data, sizeof(wasp_payload_t));
-                xSemaphoreGive(radioMutex);
-            }
-            
-            if (state == RADIOLIB_ERR_NONE) {
-                // Succès de transmission silencieux
-            } else {
-                Serial.printf("[RADIO] Transmission FAILED, code: %d\n", state);
-            }
-        }
-    }
 }
 
 /**
@@ -156,13 +133,26 @@ void loop() {
         gracefulShutdown();
     }
 
-    // 5. Vérifier si le bouton utilisateur GPIO 38 est pressé (mise en veille Standby)
+    // 5. Vérifier si le bouton utilisateur GPIO 38 est pressé (changement de mode ou extinction)
     if (digitalRead(38) == LOW) {
+        uint32_t pressStart = millis();
         delay(50); // anti-rebond simple
         if (digitalRead(38) == LOW) {
-            // Attendre le relâchement du bouton pour éviter de se réveiller immédiatement
-            while (digitalRead(38) == LOW) { delay(10); }
-            enterStandbyMode();
+            // Attendre le relâchement ou le dépassement du seuil d'appui long (1.5 seconde)
+            while (digitalRead(38) == LOW && (millis() - pressStart < 1500)) { 
+                delay(10); 
+            }
+            
+            uint32_t pressDuration = millis() - pressStart;
+            if (pressDuration >= 1500) {
+                // Appui long : Extinction / Veille Standby
+                while (digitalRead(38) == LOW) { delay(10); } // Attendre relâchement total
+                enterStandbyMode();
+            } else {
+                // Appui court : Changement de mode (Vol <-> Eco)
+                currentMode = (currentMode == 0) ? 1 : 0;
+                configureMode(currentMode);
+            }
         }
     }
 
@@ -173,78 +163,3 @@ void loop() {
     delay(1);
 }
 
-/**
- * @brief Coupe proprement les périphériques LoRa/GPS et bascule l'ESP32 en Deep Sleep (réveil par bouton utilisateur).
- */
-void enterStandbyMode() {
-    Serial.println("\n[SYSTEM] Bouton utilisateur pressé. Entrée en veille Standby (Deep Sleep)...");
-    Serial.flush();
-    
-    // Clignotement lent pour notifier la mise en veille
-    pinMode(4, OUTPUT);
-    digitalWrite(4, LOW);  // LED allumée (actif bas)
-    delay(400);
-    digitalWrite(4, HIGH); // LED éteinte
-    
-    // 1. Mettre la puce radio en sommeil profond
-    radio.sleep();
-
-    // 2. Couper le GPS et la radio via le PMU pour maximiser l'économie d'énergie
-#if defined(WASP_BOARD_V1_2)
-    XPowersLibInterface *pPMU = &PMU;
-    pPMU->disablePowerOutput(XPOWERS_ALDO3); // GPS
-    pPMU->disablePowerOutput(XPOWERS_ALDO2); // LoRa
-#else
-    PMU.disableLDO3(); // GPS
-    PMU.disableLDO2(); // LoRa
-#endif
-
-    // 3. Configurer le réveil de l'ESP32 par appui sur le bouton utilisateur (GPIO 38)
-    esp_sleep_enable_ext0_wakeup(GPIO_NUM_38, 0); // Réveil sur niveau bas (0 = pressé)
-
-    // 4. Passer en sommeil profond
-    esp_deep_sleep_start();
-}
-
-/**
- * @brief Assemble et envoie une trame de télémétrie (GPS + Système).
- */
-void send_telemetry() {
-    wasp_payload_t packet;
-    
-    // Remplissage de l'en-tête de routage
-    packet.id = activeConfig.trackerId; 
-    packet.apid = activeConfig.apid; 
-    packet.type = activeConfig.trackerType;
-    packet.utc = (uint32_t)rtc.getEpoch();
-    
-    // Remplissage des coordonnées GPS (conversion float en tableau d'octets)
-    union FloatConverter { float f; uint8_t b[4]; };
-    FloatConverter conv;
-    
-    conv.f = (float)gps.location.lat();    memcpy(packet.lat, conv.b, 4);
-    conv.f = (float)gps.location.lng();    memcpy(packet.lon, conv.b, 4);
-    conv.f = (float)gps.altitude.meters(); memcpy(packet.alt, conv.b, 4);
-    conv.f = (float)gps.speed.kmph();      memcpy(packet.spd, conv.b, 4);
-    conv.f = (float)gps.course.deg();      memcpy(packet.cog, conv.b, 4);
-
-    // Mesures du PMU (tension batterie et température interne)
-    packet.vbat = getPMUBatteryVoltage();
-    
-    float internalTemp = getPMUTemperature();
-    packet.temp = (int16_t)(internalTemp * 100.0f); // Conversion en 1/100 °C
-    
-    // Construction du bitmask d'état combinant satellites et fix
-    packet.status = (uint8_t)(gps.satellites.value() & 0x1F); // Bits 0-4: Sats
-    if (gps.location.isValid()) {
-        packet.status |= (1 << 7); // Bit 7: Fix GPS valide
-    }
-    
-    // Traiter et émettre les données de télémétrie sur les ports de communication série (USB/Bluetooth)
-    outputTelemetryFrame(packet);
-
-    // Envoi de la télémétrie dans la file de transmission radio
-    if (gpsQueue != NULL) {
-        xQueueSend(gpsQueue, &packet, 0);
-    }
-}

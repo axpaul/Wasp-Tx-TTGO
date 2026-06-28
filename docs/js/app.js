@@ -67,6 +67,10 @@ document.addEventListener('DOMContentLoaded', () => {
           ? (lang === 'en' ? 'Valid Fix' : 'Fix valide') 
           : (lang === 'en' ? 'No Fix' : 'Aucun Fix');
         
+        const modeText = details.mode === 1 
+          ? (lang === 'en' ? 'Eco 🔋' : 'Éco 🔋') 
+          : (lang === 'en' ? 'Flight 🚀' : 'Vol 🚀');
+        
         const popupContent = `
           <div style="font-family: 'Outfit', sans-serif; color: #333; line-height: 1.4; padding: 0.2rem;">
             <b style="font-size: 1rem; color: #111;">Tracker WASP: ${details.tracker} (APID: ${details.apid})</b><br>
@@ -74,6 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <b>Vitesse:</b> ${details.spd.toFixed(1)} km/h<br>
             <b>Cap (COG):</b> ${details.cog.toFixed(1)}°<br>
             <b>GPS Fix:</b> ${fixText}<br>
+            <b>Mode:</b> ${modeText}<br>
             <b>Heure GPS:</b> ${details.time}
           </div>
         `;

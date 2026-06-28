@@ -112,3 +112,97 @@ void initRadio() {
         xSemaphoreGive(radioMutex);
     }
 }
+
+/**
+ * @brief Tache FreeRTOS pour l'envoi asynchrone des trames LoRa.
+ */
+void loraTask(void *pvParameters) {
+    wasp_payload_t data;
+    while (true) {
+        if (xQueueReceive(gpsQueue, &data, portMAX_DELAY) == pdPASS) {
+            int state = RADIOLIB_ERR_UNKNOWN;
+            
+            // Recupere le mode a partir du bit 5 du statut de la payload
+            uint8_t mode = (data.status >> 5) & 0x01;
+            
+            // Clignotement de la LED bleue (GPIO 4, actif bas) sur transmission
+            pinMode(4, OUTPUT);
+            if (mode == 0) {
+                // Mode Vol : 1 flash court
+                digitalWrite(4, LOW);
+                delay(70);
+                digitalWrite(4, HIGH);
+            } else {
+                // Mode Eco : 2 flashes courts
+                digitalWrite(4, LOW);
+                delay(70);
+                digitalWrite(4, HIGH);
+                delay(70);
+                digitalWrite(4, LOW);
+                delay(70);
+                digitalWrite(4, HIGH);
+            }
+
+            // Attente du semaphore pour utiliser le bus SPI de la radio
+            if (xSemaphoreTake(radioMutex, portMAX_DELAY) == pdTRUE) {
+                state = radio.transmit((uint8_t*)&data, sizeof(wasp_payload_t));
+                xSemaphoreGive(radioMutex);
+            }
+            
+            if (state == RADIOLIB_ERR_NONE) {
+                // Succes de transmission silencieux
+            } else {
+                Serial.printf("[RADIO] Transmission FAILED, code: %d\n", state);
+            }
+        }
+    }
+}
+
+/**
+ * @brief Configure la puissance radio et l'alarme du timer selon le mode de fonctionnement.
+ */
+void configureMode(uint8_t mode) {
+    pinMode(4, OUTPUT);
+    if (mode == 0) {
+        // Mode Vol (Normal)
+        Serial.println("[SYSTEM] Mode VOL selectionne (Performance)");
+        
+        // Rétablir l'intervalle et la puissance de la configuration d'origine
+        updateTimerInterval(activeConfig.txInterval);
+        
+        if (xSemaphoreTake(radioMutex, portMAX_DELAY) == pdTRUE) {
+            radio.setOutputPower(activeConfig.power);
+            xSemaphoreGive(radioMutex);
+        }
+        
+        // Confirmation visuelle : 1 long flash de LED
+        digitalWrite(4, LOW);
+        delay(400);
+        digitalWrite(4, HIGH);
+    } else {
+        // Mode Eco (Lent)
+        Serial.println("[SYSTEM] Mode ECO selectionne (Economie d'energie)");
+        
+        // Emission lente : 15 secondes au minimum
+        uint16_t ecoInterval = activeConfig.txInterval;
+        if (ecoInterval < 15) {
+            ecoInterval = 15;
+        }
+        updateTimerInterval(ecoInterval);
+        
+        // Puissance LoRa reduite : 10 dBm
+        if (xSemaphoreTake(radioMutex, portMAX_DELAY) == pdTRUE) {
+            radio.setOutputPower(10);
+            xSemaphoreGive(radioMutex);
+        }
+        
+        // Confirmation visuelle : 2 longs flashes de LED
+        digitalWrite(4, LOW);
+        delay(350);
+        digitalWrite(4, HIGH);
+        delay(200);
+        digitalWrite(4, LOW);
+        delay(350);
+        digitalWrite(4, HIGH);
+    }
+}

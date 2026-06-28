@@ -32,6 +32,15 @@ document.addEventListener('DOMContentLoaded', () => {
       // Déplacement du marqueur
       marker.setLatLng(newLatLng);
       
+      // Déclenchement de la pulsation glow sur l'icône du marqueur Leaflet
+      if (marker && marker._icon) {
+        const iconEl = marker._icon;
+        iconEl.classList.remove('wasp-pulse');
+        // Force reflow pour réinitialiser l'animation CSS
+        void iconEl.offsetWidth;
+        iconEl.classList.add('wasp-pulse');
+      }
+      
       // Ajout du point à la trajectoire
       trackPoints.push(newLatLng);
       const isFirstPoint = trackPoints.length === 1;

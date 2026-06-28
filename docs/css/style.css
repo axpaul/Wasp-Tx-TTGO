@@ -970,3 +970,21 @@ footer {
 .stat-val { font-size: 1.5rem; font-weight: 800; color: var(--color-primary); }
 .stat-lbl { font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem; text-align: center; }
 
+/* Micro-animation de pulsation (pulse/glow) pour le marqueur Leaflet */
+@keyframes wasp-marker-pulse-anim {
+  0% {
+    filter: none;
+  }
+  15% {
+    /* Virage de couleur vers le vert néon + double ombre portée lumineuse */
+    filter: hue-rotate(140deg) brightness(1.4) saturate(1.6) drop-shadow(0 0 8px #10b981) drop-shadow(0 0 15px #10b981);
+  }
+  100% {
+    filter: none;
+  }
+}
+
+.wasp-pulse {
+  animation: wasp-marker-pulse-anim 0.8s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+

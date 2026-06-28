@@ -245,6 +245,8 @@ function parseNectarFrame(frame, payloadSize, hasTimestamp) {
   const MISSION_TYPES = ["FX", "MF", "BALLOON", "OTHER"];
   let trackerSSID = `${MISSION_TYPES[ssid_type]}-${ssid_num}`;
   
+  let latVal = 'N/A';
+  let lonVal = 'N/A';
   let altVal = 'N/A';
   let batVal = 'N/A';
   
@@ -264,7 +266,9 @@ function parseNectarFrame(frame, payloadSize, hasTimestamp) {
     let sats = statusByte & 0x1F;
     let gpsFix = (statusByte >> 7) & 0x01;
     
-    // Formatter altitude et batterie
+    // Formatter coordonnées, altitude et batterie
+    latVal = lat.toFixed(6);
+    lonVal = lon.toFixed(6);
     altVal = `${alt.toFixed(1)} m`;
     batVal = `${(vbat / 1000).toFixed(2)} V`;
     
@@ -305,12 +309,12 @@ function parseNectarFrame(frame, payloadSize, hasTimestamp) {
     }
   }
   
-  // Add to NectarMC table at the end (with Altitude and Battery values)
+  // Add to NectarMC table at the end (with Latitude, Longitude, Altitude and Battery values)
   addNectarFrameToTable({
     ts: new Date(tsEpoch * 1000).toISOString().replace('T', ' ').substring(0, 19),
     tracker: trackerSSID,
-    apid: apid,
-    size: payloadSize,
+    lat: latVal,
+    lon: lonVal,
     alt: altVal,
     bat: batVal,
     crc: crcOK ? '<span style="color: var(--color-success)">OK</span>' : '<span style="color: var(--color-danger)">KO</span>',
@@ -326,8 +330,8 @@ function addNectarFrameToTable(f) {
     <td>${frameIndex}</td>
     <td style="font-family: var(--font-mono);">${f.ts}</td>
     <td style="color: var(--color-cyan); font-weight: 600;">${f.tracker}</td>
-    <td>${f.apid}</td>
-    <td>${f.size}</td>
+    <td style="font-family: var(--font-mono);">${f.lat}</td>
+    <td style="font-family: var(--font-mono);">${f.lon}</td>
     <td>${f.alt}</td>
     <td>${f.bat}</td>
     <td>${f.crc}</td>

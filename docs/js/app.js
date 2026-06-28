@@ -31,16 +31,25 @@ document.addEventListener('DOMContentLoaded', () => {
       
       // Déplacement du marqueur
       marker.setLatLng(newLatLng);
-      map.setView(newLatLng, 15);
       
       // Ajout du point à la trajectoire
       trackPoints.push(newLatLng);
+      const isFirstPoint = trackPoints.length === 1;
+      
       if (trackPoints.length > 50) {
         trackPoints.shift(); // Anti-overflow : Conserver uniquement les 50 derniers points
       }
       
       // Mise à jour du tracé de la ligne sur la carte
       polyline.setLatLngs(trackPoints);
+      
+      // Gestion du recentrage intelligent de la carte
+      const chkAutoCenter = document.getElementById('chk-auto-center');
+      const shouldCenter = !chkAutoCenter || chkAutoCenter.checked;
+      
+      if (shouldCenter || isFirstPoint) {
+        map.setView(newLatLng, isFirstPoint ? 15 : map.getZoom());
+      }
       
       // Mise à jour de l'infobulle popup dynamique
       if (details) {

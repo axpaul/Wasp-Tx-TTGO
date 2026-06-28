@@ -1,6 +1,6 @@
 export const translations = {
   fr: {
-    header_subtitle: "Positionnement d'Altitude et de Statut Sans Fil",
+    header_subtitle: "Centre de Contrôle Web WASP v1.0.6",
     conn_title: "🔌 Liaison Série USB",
     conn_baudrate: "Vitesse de transmission (Baud) :",
     conn_connect: "Connexion",
@@ -36,6 +36,7 @@ export const translations = {
     lbl_battery: "BATTERIE (V)",
     lbl_gps_fix: "FIX GPS",
     map_title: "🗺️ Position GPS Live",
+    map_auto_center: "Auto-Centrer",
     table_title: "📋 Trames reçues en direct (NectarMC)",
     th_index: "Index",
     th_timestamp: "Horodatage",
@@ -55,7 +56,7 @@ export const translations = {
     btn_clear: "Effacer"
   },
   en: {
-    header_subtitle: "Wireless Altitude & Status Positioning",
+    header_subtitle: "WASP Web Control Center v1.0.6",
     conn_title: "🔌 USB Serial Link",
     conn_baudrate: "Baud rate:",
     conn_connect: "Connect",
@@ -91,6 +92,7 @@ export const translations = {
     lbl_battery: "BATTERY (V)",
     lbl_gps_fix: "GPS FIX",
     map_title: "🗺️ Live GPS Position",
+    map_auto_center: "Auto-Center",
     table_title: "📋 Live received frames (NectarMC)",
     th_index: "Index",
     th_timestamp: "Timestamp",

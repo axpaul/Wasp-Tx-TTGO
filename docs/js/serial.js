@@ -60,7 +60,9 @@ window.addEventListener('lang-changed', updateDynamicUI);
 btnConnect.addEventListener('click', async () => {
   try {
     port = await navigator.serial.requestPort();
-    await port.open({ baudRate: 115200 });
+    const baudSelect = document.getElementById('baudrate');
+    const selectedBaud = baudSelect ? parseInt(baudSelect.value) : 115200;
+    await port.open({ baudRate: selectedBaud });
 
     connBadge.classList.remove('disconnected');
     connBadge.classList.add('connected');

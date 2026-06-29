@@ -119,6 +119,13 @@ graph TD
     Loop -->|📨 gpsQueue| Lora_Task
 ```
 
+### 🛡️ Gestion des Interruptions LoRa & Watchdog Failsafe
+
+Les firmwares de l'écosystème exploitent les interruptions matérielles sur la broche **DIO0** du SX1276 (signalant la fin d'une réception RX ou d'une émission TX) à l'aide de sémaphores FreeRTOS configurés avec un timeout de **2 secondes**. Leurs comportements de secours (*failsafe*) sont optimisés pour leurs rôles respectifs :
+
+1. **Watchdog Thermique & Énergétique (Wasp-TX - Émetteur)** : Sur l'émetteur embarqué, la priorité est de protéger le matériel et l'autonomie. En émission LoRa, l'amplificateur RF consomme beaucoup de courant (~120 mA). Si le signal de fin d'émission sur DIO0 est manqué (glitch de registre, erreur SPI ou broche coupée), le module risquerait de rester bloqué en émission continue et de surchauffer. Après 2 secondes sans interruption, le watchdog de Wasp-TX force la radio en mode veille (`radio.standby()`) pour couper l'étage de puissance RF et préserver l'accu.
+2. **Failsafe par Polling SPI (RocketStation Nectar - Récepteur)** : L'objectif de la station au sol est de ne perdre aucune trame de télémétrie en vol. Si la broche physique DIO0 subit une défaillance (soudure défectueuse, bruit parasite), la tâche RX bascule automatiquement après 2 secondes sur une scrutation active du registre radio par bus SPI (`radio.checkIrq(RADIOLIB_IRQ_RX_DONE)`). Si un paquet a été reçu, il est décodé et récupéré de force.
+
 ### Rôle et contenu de chaque fichier :
 *   **[include/header.h](file:///c:/Users/paulm/OneDrive/Documents/PlatformIO/Projects/Wasp-TX/include/header.h)** : Déclarations globales. Définit le brochage (pinout) des cartes T-Beam v1.1 et v1.2, la structure binaire de la charge utile WASP (32 octets), la structure thread-safe `WaspGPSData`, et exporte les variables d'état partagées (comme le mode actif `currentMode`).
 *   **[src/main.cpp](file:///c:/Users/paulm/OneDrive/Documents/PlatformIO/Projects/Wasp-TX/src/main.cpp)** : Séquenceur principal. Contient `setup()`, `loop()`, l'interruption du timer (`onTimer()`), et la boucle de contrôle avec anti-rebond pour le bouton utilisateur. Il se concentre sur l'initialisation matérielle et la gestion logique globale.

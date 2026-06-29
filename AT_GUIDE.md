@@ -1,4 +1,4 @@
-# Guide Complet des Commandes AT — Wasp-TX
+# Guide Complet des Commandes AT — Wasp-TX v1.0.6
 
 Ce document détaille toutes les commandes AT disponibles sur le tracker **Wasp-TX**.
 
@@ -126,11 +126,13 @@ Pour éviter de devoir reconfigurer la carte après chaque redémarrage, les par
 ### 4. Paramètres de Sortie et Stockage
 
 #### `AT+DEBUG?`
-*   **Rôle** : Interroge le statut d'activation des logs texte clairs (`[TX]` et `[HEX]`). *(Désormais déprécié, le mode debug textuel ayant été supprimé du firmware).*
+*   **Rôle** : Interroge l'activation des logs de débogage clairs sur le port USB.
+*   **Format de réponse** : `+DEBUG: <0|1>` suivi de `OK`.
 
 #### `AT+DEBUG=<0|1>`
-*   **Rôle** : Active (1) ou désactive (0) les logs texte explicites sur le port USB. *(Déprécié, n'a plus d'effet car les trames binaires sont émises directement).*
+*   **Rôle** : Active (1) ou désactive (0) les logs de débogage texte explicites sur le port USB.
 *   **Sauvegarde NVS** : **Automatique** (sauvegardé immédiatement).
+*   **Format de réponse** : `OK`.
 
 #### `AT+BINUSB?`
 *   **Rôle** : Interroge l'activation de la sortie binaire.

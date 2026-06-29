@@ -82,11 +82,13 @@ Wasp-TX est conçu de manière modulaire pour séparer les responsabilités et g
 ```mermaid
 graph TD
     hdr["include/header.h<br><i>(Déclarations globales & brochage)</i>"] --> main["src/main.cpp<br><i>(Callbacks, Setup & Loop)</i>"]
+    hdr --> gps["src/gps.cpp<br><i>(Tâche & variables GPS)</i>"]
     hdr --> pmu["src/pmu.cpp<br><i>(Alimentation & Veille PMU)</i>"]
     hdr --> radio["src/radio.cpp<br><i>(LoRa, Task & Modes)</i>"]
     hdr --> serial["src/serial.cpp<br><i>(Télémétrie & Trames Nectar)</i>"]
     hdr --> at["src/at_commands.cpp<br><i>(Traitement commandes AT)</i>"]
 
+    main --> gps
     main --> pmu
     main --> radio
     main --> serial
@@ -115,7 +117,8 @@ graph TD
 
 ### Rôle et contenu de chaque fichier :
 *   **[include/header.h](file:///c:/Users/paulm/OneDrive/Documents/PlatformIO/Projects/Wasp-TX/include/header.h)** : Déclarations globales. Définit le brochage (pinout) des cartes T-Beam v1.1 et v1.2, la structure binaire de la charge utile WASP (32 octets), la structure thread-safe `WaspGPSData`, et exporte les variables d'état partagées (comme le mode actif `currentMode`).
-*   **[src/main.cpp](file:///c:/Users/paulm/OneDrive/Documents/PlatformIO/Projects/Wasp-TX/src/main.cpp)** : Séquenceur principal. Contient `setup()`, `loop()`, la tâche prioritaire `gpsTask()` qui décode les trames NMEA en tâche de fond, l'interruption du timer (`onTimer()`), et la boucle de contrôle avec anti-rebond pour le bouton utilisateur.
+*   **[src/main.cpp](file:///c:/Users/paulm/OneDrive/Documents/PlatformIO/Projects/Wasp-TX/src/main.cpp)** : Séquenceur principal. Contient `setup()`, `loop()`, l'interruption du timer (`onTimer()`), et la boucle de contrôle avec anti-rebond pour le bouton utilisateur. Il se concentre sur l'initialisation matérielle et la gestion logique globale.
+*   **[src/gps.cpp](file:///c:/Users/paulm/OneDrive/Documents/PlatformIO/Projects/Wasp-TX/src/gps.cpp)** : Télémétrie GPS. Contient l'instance de `TinyGPSPlus`, les variables et verrous d'échange (`gpsMutex`, `sharedGPSData`), ainsi que la tâche d'arrière-plan autonome `gpsTask()` s'exécutant sur le Cœur 0 pour le décodage NMEA.
 *   **[src/pmu.cpp](file:///c:/Users/paulm/OneDrive/Documents/PlatformIO/Projects/Wasp-TX/src/pmu.cpp)** : Gestion d'énergie (PMU AXP192/AXP2101). Initialise le circuit d'alimentation, gère l'extinction logicielle complète (`gracefulShutdown()`) et la veille profonde (`enterStandbyMode()`).
 *   **[src/radio.cpp](file:///c:/Users/paulm/OneDrive/Documents/PlatformIO/Projects/Wasp-TX/src/radio.cpp)** : Émission radio. Gère l'initialisation de la radio SX1276, la tâche FreeRTOS `loraTask()` de transmission (avec modulation du clignotement de la LED rouge) et applique la configuration de puissance/débit via `configureMode()`.
 *   **[src/serial.cpp](file:///c:/Users/paulm/OneDrive/Documents/PlatformIO/Projects/Wasp-TX/src/serial.cpp)** : Communication série et télémétrie. Assemble de manière thread-safe le paquet WASP (avec encodage du mode actif sur le bit 5 du statut) et émet la trame NectarMC cryptée/CRC sur USB et Bluetooth.

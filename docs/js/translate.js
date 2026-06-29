@@ -1,5 +1,6 @@
 export const translations = {
   fr: {
+    header_title: "ÉMETTEUR WASP-TX",
     header_subtitle: "Centre de Contrôle Web WASP v1.0.6",
     conn_title: "🔌 Liaison Série USB",
     conn_baudrate: "Vitesse de transmission (Baud) :",
@@ -72,9 +73,28 @@ export const translations = {
     btn_send: "Envoyer",
     at_helper: "📋 Aide-Mémoire AT",
     btn_export: "Exporter CSV",
-    btn_clear: "Effacer"
+    btn_clear: "Effacer",
+    at_desc_at: "Test de communication avec la station",
+    at_desc_help: "Afficher le menu d'aide complet",
+    at_desc_info: "Interroger l'identification de la station",
+    at_desc_cfg: "Obtenir la configuration détaillée",
+    at_desc_id_get: "Interroger l'ID du tracker (SSID Num)",
+    at_desc_type_get: "Interroger le type de tracker (0=FX, 1=MF, 2=BALLOON, 3=OTHER)",
+    at_desc_interval_get: "Interroger l'intervalle de transmission (sec)",
+    at_desc_freq_get: "Interroger la fréquence active",
+    at_desc_sf_get: "Interroger le Spreading Factor",
+    at_desc_bw_get: "Interroger la bande passante",
+    at_desc_power_get: "Interroger la puissance d'émission LoRa (dBm)",
+    at_desc_crc_get: "Interroger le statut du CRC",
+    at_desc_debug_on: "Activer les logs de débogage étendus",
+    at_desc_debug_off: "Désactiver les logs de débogage étendus",
+    at_desc_binusb_on: "Activer la sortie télémétrique binaire",
+    at_desc_binusb_off: "Désactiver la sortie télémétrique binaire",
+    at_desc_save: "Sauvegarder la config active en NVS",
+    at_desc_reset: "Reset d'usine et redémarrage"
   },
   en: {
+    header_title: "WASP-TX TRANSMITTER",
     header_subtitle: "WASP Web Control Center v1.0.6",
     conn_title: "🔌 USB Serial Link",
     conn_baudrate: "Baud rate:",
@@ -147,7 +167,25 @@ export const translations = {
     btn_send: "Send",
     at_helper: "📋 AT Quick Reference",
     btn_export: "Export CSV",
-    btn_clear: "Clear"
+    btn_clear: "Clear",
+    at_desc_at: "Test communication with the station",
+    at_desc_help: "Print the complete help menu",
+    at_desc_info: "Query station identification",
+    at_desc_cfg: "Display the detailed configuration",
+    at_desc_id_get: "Query tracker ID (SSID Num)",
+    at_desc_type_get: "Query tracker type (0=FX, 1=MF, 2=BALLOON, 3=OTHER)",
+    at_desc_interval_get: "Query transmission interval (sec)",
+    at_desc_freq_get: "Query the active frequency",
+    at_desc_sf_get: "Query active Spreading Factor",
+    at_desc_bw_get: "Query active Bandwidth",
+    at_desc_power_get: "Query LoRa TX power (dBm)",
+    at_desc_crc_get: "Query CRC configuration status",
+    at_desc_debug_on: "Enable extended debug logs",
+    at_desc_debug_off: "Disable extended debug logs",
+    at_desc_binusb_on: "Enable binary telemetry output",
+    at_desc_binusb_off: "Disable binary telemetry output",
+    at_desc_save: "Save config dynamically to NVS",
+    at_desc_reset: "Factory reset and reboot station"
   }
 };
 

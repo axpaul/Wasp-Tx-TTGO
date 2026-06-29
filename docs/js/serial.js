@@ -13,7 +13,6 @@ const terminalLogs = document.getElementById('terminal-logs');
 const terminalInput = document.getElementById('terminal-input');
 const btnSend = document.getElementById('btn-send');
 const terminalForm = document.getElementById('terminal-form');
-const btnAtCmds = document.querySelectorAll('.btn-at');
 
 const telemetryTbody = document.getElementById('telemetry-tbody');
 const lblEmptyTelemetry = document.getElementById('row-empty');
@@ -53,7 +52,10 @@ function updateDynamicUI() {
   }
 }
 
-window.addEventListener('lang-changed', updateDynamicUI);
+window.addEventListener('lang-changed', () => {
+  updateDynamicUI();
+  renderAtHelperList();
+});
 
 btnConnect.addEventListener('click', async () => {
   try {
@@ -456,12 +458,7 @@ terminalForm.addEventListener('submit', (e) => {
   }
 });
 
-btnAtCmds.forEach(btn => {
-  btn.addEventListener('click', () => {
-    const cmd = btn.getAttribute('data-cmd');
-    sendData(cmd);
-  });
-});
+
 
 document.getElementById('btn-read-terminal')?.addEventListener('click', () => {
   terminalLogs.innerHTML = '';
@@ -710,3 +707,49 @@ async function fetchBinary(url) {
   const arrayBuffer = await response.arrayBuffer();
   return new Uint8Array(arrayBuffer);
 }
+
+const AT_COMMANDS_HELP = [
+  { cmd: "AT", descKey: "at_desc_at" },
+  { cmd: "AT+HELP", descKey: "at_desc_help" },
+  { cmd: "AT+INFO", descKey: "at_desc_info" },
+  { cmd: "AT+CFG", descKey: "at_desc_cfg" },
+  { cmd: "AT+ID?", descKey: "at_desc_id_get" },
+  { cmd: "AT+TYPE?", descKey: "at_desc_type_get" },
+  { cmd: "AT+INTERVAL?", descKey: "at_desc_interval_get" },
+  { cmd: "AT+FREQ?", descKey: "at_desc_freq_get" },
+  { cmd: "AT+SF?", descKey: "at_desc_sf_get" },
+  { cmd: "AT+BW?", descKey: "at_desc_bw_get" },
+  { cmd: "AT+POWER?", descKey: "at_desc_power_get" },
+  { cmd: "AT+CRC?", descKey: "at_desc_crc_get" },
+  { cmd: "AT+DEBUG=1", descKey: "at_desc_debug_on" },
+  { cmd: "AT+DEBUG=0", descKey: "at_desc_debug_off" },
+  { cmd: "AT+BINUSB=1", descKey: "at_desc_binusb_on" },
+  { cmd: "AT+BINUSB=0", descKey: "at_desc_binusb_off" },
+  { cmd: "AT+SAVE", descKey: "at_desc_save" },
+  { cmd: "AT+RESET", descKey: "at_desc_reset" }
+];
+
+function renderAtHelperList() {
+  const container = document.getElementById('at-helper-list');
+  if (!container) return;
+  container.innerHTML = '';
+  
+  AT_COMMANDS_HELP.forEach(item => {
+    const el = document.createElement('div');
+    el.className = 'at-helper-item';
+    el.innerHTML = `
+      <span class="at-helper-cmd">${item.cmd}</span>
+      <span class="at-helper-desc">${getTranslation(item.descKey)}</span>
+    `;
+    el.addEventListener('click', () => {
+      if (terminalInput) {
+        terminalInput.value = item.cmd;
+        terminalInput.focus();
+      }
+    });
+    container.appendChild(el);
+  });
+}
+
+// Initial helper list rendering
+renderAtHelperList();

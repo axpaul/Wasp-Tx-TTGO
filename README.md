@@ -141,20 +141,20 @@ Deux méthodes s'offrent à vous pour programmer votre carte TTGO T-Beam : utili
 
 ### Méthode 1 : Utilisation des Binaires Précompilés (Recommandé)
 
-Si vous ne souhaitez pas compiler le projet, des fichiers `.bin` déjà compilés pour chaque variante matérielle sont disponibles dans le dossier **[binary/](./binary)**.
+Si vous ne souhaitez pas compiler le projet, des fichiers `.bin` déjà compilés pour chaque variante matérielle sont disponibles dans le dossier **[binaries/](./binaries)**.
 
 | Binaire à Flasher | Modèle de T-Beam | Fréquence LoRa | Puce PMU |
 | :--- | :--- | :--- | :--- |
-| **[Wasp-TX_v1.1_868MHz.bin](./binary/Wasp-TX_v1.1_868MHz.bin)** | T-Beam v1.1 | **868 MHz** | AXP192 |
-| **[Wasp-TX_v1.2_868MHz.bin](./binary/Wasp-TX_v1.2_868MHz.bin)** | T-Beam v1.2 | **868 MHz** | AXP2101 |
-| **[Wasp-TX_v1.1_433MHz.bin](./binary/Wasp-TX_v1.1_433MHz.bin)** | T-Beam v1.1 | **433 MHz** | AXP192 |
-| **[Wasp-TX_v1.2_433MHz.bin](./binary/Wasp-TX_v1.2_433MHz.bin)** | T-Beam v1.2 | **433 MHz** | AXP2101 |
+| **[Wasp-TX_v1.1_868MHz.bin](./binaries/Wasp-TX_v1.1_868MHz.bin)** | T-Beam v1.1 | **868 MHz** | AXP192 |
+| **[Wasp-TX_v1.2_868MHz.bin](./binaries/Wasp-TX_v1.2_868MHz.bin)** | T-Beam v1.2 | **868 MHz** | AXP2101 |
+| **[Wasp-TX_v1.1_433MHz.bin](./binaries/Wasp-TX_v1.1_433MHz.bin)** | T-Beam v1.1 | **433 MHz** | AXP192 |
+| **[Wasp-TX_v1.2_433MHz.bin](./binaries/Wasp-TX_v1.2_433MHz.bin)** | T-Beam v1.2 | **433 MHz** | AXP2101 |
 
 **Procédure de flash rapide :**
 1. Connectez votre T-Beam en USB à votre ordinateur.
 2. Ouvrez l'outil de flash en ligne **[ESP Web Flasher](https://esp.github.io/esptool-js/)** ou utilisez l'outil local **Esptool** en ligne de commande :
    ```bash
-   esptool.py --chip esp32 --port COM_PORT write_flash 0x10000 binary/Wasp-TX_v1.X_XXXMHz.bin
+   esptool.py --chip esp32 --port COM_PORT write_flash 0x10000 binaries/Wasp-TX_v1.X_XXXMHz.bin
    ```
    *(Remplacez `COM_PORT` par le port de votre carte et spécifiez le bon fichier `.bin`)*.
 

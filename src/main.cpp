@@ -16,6 +16,8 @@ TinyGPSPlus gps;
 ESP32Time rtc;
 QueueHandle_t gpsQueue = NULL;
 SemaphoreHandle_t radioMutex = NULL;
+SemaphoreHandle_t gpsMutex = NULL;
+WaspGPSData sharedGPSData = {0};
 hw_timer_t *timer = NULL;
 volatile bool send_trigger = false;
 volatile uint8_t currentMode = 0; // 0 = Vol (Normal), 1 = Eco (Lent)
@@ -28,6 +30,47 @@ BluetoothSerial SerialBT;
 
 void IRAM_ATTR onTimer() {
     send_trigger = true;
+}
+
+/**
+ * @brief Tâche FreeRTOS dédiée à la lecture et au décodage asynchrone du module GPS.
+ */
+void gpsTask(void *pvParameters) {
+    while (1) {
+        bool encoded = false;
+        while (Serial1.available() > 0) {
+            if (gps.encode(Serial1.read())) {
+                encoded = true;
+            }
+        }
+        
+        if (encoded) {
+            if (xSemaphoreTake(gpsMutex, pdMS_TO_TICKS(20)) == pdTRUE) {
+                sharedGPSData.latitude = gps.location.lat();
+                sharedGPSData.longitude = gps.location.lng();
+                sharedGPSData.altitude = gps.altitude.meters();
+                sharedGPSData.speed = gps.speed.kmph();
+                sharedGPSData.course = gps.course.deg();
+                sharedGPSData.satellites = gps.satellites.value();
+                sharedGPSData.fix = gps.location.isValid();
+                
+                if (gps.time.isValid()) {
+                    sharedGPSData.hour = gps.time.hour();
+                    sharedGPSData.minute = gps.time.minute();
+                    sharedGPSData.second = gps.time.second();
+                    
+                    // Synchronisation de l'heure RTC locale
+                    if (gps.time.isUpdated() && gps.location.isValid()) {
+                        rtc.setTime(gps.time.second(), gps.time.minute(), gps.time.hour(), 
+                                    gps.date.day(), gps.date.month(), gps.date.year());
+                    }
+                }
+                xSemaphoreGive(gpsMutex);
+            }
+        }
+        
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
 }
 
 /**
@@ -92,12 +135,16 @@ void setup() {
     // Initialiser l'horloge RTC interne
     rtc.setTime(0, 0, 0, 1, 1, 2026);
 
-    // Initialiser le sémaphore de protection de la radio et la file d'attente
+    // Initialiser les sémaphores de protection (Mutex) et la file d'attente
     radioMutex = xSemaphoreCreateMutex();
+    gpsMutex = xSemaphoreCreateMutex();
     gpsQueue = xQueueCreate(5, sizeof(wasp_payload_t));
 
-    // Créer la tâche FreeRTOS de transmission LoRa
-    xTaskCreate(loraTask, "LoRaTX", 4096, NULL, 1, NULL);
+    // Créer la tâche FreeRTOS de décodage GPS sur le Cœur 0 (PRO_CPU_NUM)
+    xTaskCreatePinnedToCore(gpsTask, "GPSTask", 3072, NULL, 2, NULL, 0);
+
+    // Créer la tâche FreeRTOS de transmission LoRa sur le Cœur 1 (APP_CPU_NUM)
+    xTaskCreatePinnedToCore(loraTask, "LoRaTX", 4096, NULL, 1, NULL, 1);
 
     // Configurer le timer matériel d'alarme pour l'envoi de la télémétrie
     timer = timerBegin(0, 80, true); // Timer 0, diviseur 80 (tick de 1 microseconde)
@@ -111,18 +158,7 @@ void setup() {
 }
 
 void loop() {
-    // 1. Lecture continue des trames GPS du port UART1
-    while (Serial1.available() > 0) {
-        gps.encode(Serial1.read());
-    }
-
-    // 2. Synchronisation de l'heure RTC locale si les données GPS sont valides et mises à jour
-    if (gps.time.isUpdated() && gps.location.isValid()) {
-        rtc.setTime(gps.time.second(), gps.time.minute(), gps.time.hour(), 
-                    gps.date.day(), gps.date.month(), gps.date.year());
-    }
-
-    // 3. Déclencheur du timer pour envoyer la télémétrie
+    // 1. Déclencheur du timer pour envoyer la télémétrie
     if (send_trigger) {
         send_telemetry();
         send_trigger = false; 

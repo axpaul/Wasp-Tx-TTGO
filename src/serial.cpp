@@ -130,11 +130,30 @@ void send_telemetry() {
     union FloatConverter { float f; uint8_t b[4]; };
     FloatConverter conv;
     
-    conv.f = (float)gps.location.lat();    memcpy(packet.lat, conv.b, 4);
-    conv.f = (float)gps.location.lng();    memcpy(packet.lon, conv.b, 4);
-    conv.f = (float)gps.altitude.meters(); memcpy(packet.alt, conv.b, 4);
-    conv.f = (float)gps.speed.kmph();      memcpy(packet.spd, conv.b, 4);
-    conv.f = (float)gps.course.deg();      memcpy(packet.cog, conv.b, 4);
+    double lat = 0.0;
+    double lon = 0.0;
+    double alt = 0.0;
+    double spd = 0.0;
+    double cog = 0.0;
+    uint32_t sats = 0;
+    bool fix = false;
+    
+    if (xSemaphoreTake(gpsMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+        lat = sharedGPSData.latitude;
+        lon = sharedGPSData.longitude;
+        alt = sharedGPSData.altitude;
+        spd = sharedGPSData.speed;
+        cog = sharedGPSData.course;
+        sats = sharedGPSData.satellites;
+        fix = sharedGPSData.fix;
+        xSemaphoreGive(gpsMutex);
+    }
+    
+    conv.f = (float)lat;    memcpy(packet.lat, conv.b, 4);
+    conv.f = (float)lon;    memcpy(packet.lon, conv.b, 4);
+    conv.f = (float)alt;    memcpy(packet.alt, conv.b, 4);
+    conv.f = (float)spd;    memcpy(packet.spd, conv.b, 4);
+    conv.f = (float)cog;    memcpy(packet.cog, conv.b, 4);
 
     // Mesures du PMU (tension batterie et temperature interne)
     packet.vbat = getPMUBatteryVoltage();
@@ -143,8 +162,8 @@ void send_telemetry() {
     packet.temp = (int16_t)(internalTemp * 100.0f); // Conversion en 1/100 °C
     
     // Construction du bitmask d'etat
-    packet.status = (uint8_t)(gps.satellites.value() & 0x1F); // Bits 0-4: Sats
-    if (gps.location.isValid()) {
+    packet.status = (uint8_t)(sats & 0x1F); // Bits 0-4: Sats
+    if (fix) {
         packet.status |= (1 << 7); // Bit 7: GPS Fix valide
     }
     if (currentMode == 1) {

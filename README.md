@@ -48,22 +48,29 @@ Le code s'adapte automatiquement selon l'environnement de compilation choisi :
 
 ---
 
-## Gestion de l'Alimentation et Boutons (On / Off / Sleep)
+## Gestion de l'Alimentation, Boutons et LEDs
 
-Wasp-TX intègre une gestion logique de l'alimentation de la carte TTGO T-Beam pour préserver la batterie et sécuriser son fonctionnement :
+Wasp-TX intègre une gestion logique de l'alimentation, des boutons physiques et des indicateurs lumineux de la carte TTGO T-Beam :
 
-* **Bouton d'Alimentation (PEKEY)** :
-  * **Allumage** : Un appui simple de ~1 seconde allume la carte et lance le tracker.
-  * **Extinction Propre (Software Power Off)** : Un clic ou un double-clic sur le bouton d'alimentation déclenche une séquence d'extinction logicielle complète :
-    1. Mise en sommeil de la puce radio LoRa (`radio.sleep()`) pour stopper toute consommation.
-    2. Extinction électrique complète du module GPS (LDO3 / ALDO3) et de la radio LoRa (LDO2 / ALDO2) par le PMU.
-    3. Signal de confirmation visuel (clignotement rapide 4 fois de la LED de la carte sur GPIO 4).
-    4. Extinction matérielle complète commandée au PMU (`PMU.shutdown()`).
-    * *Note : Si le câble USB reste branché, la tension VBUS maintient l'alimentation ; l'ESP32 bascule alors automatiquement en veille Deep Sleep.*
+### 🔘 Fonctions des Boutons
 
-* **Bouton Utilisateur (GPIO 38)** :
-  * **Mise en Standby (Mise en Veille)** : Un appui simple sur le bouton utilisateur éteint la radio/GPS et bascule immédiatement l'ESP32 en Deep Sleep (consommation < 15 µA).
-  * **Réveil (Wakeup)** : Un nouvel appui sur ce bouton utilisateur (GPIO 38) réveille instantanément la carte.
+*   **Bouton d'Alimentation (PEKEY)** :
+    *   **Allumage** : Un appui simple de ~1 seconde démarre proprement la carte.
+    *   **Extinction complète (Software Power Off)** : Un clic ou double-clic (selon la version de T-Beam) envoie un signal d'extinction logicielle complète. Le PMU coupe alors l'alimentation électrique de la radio et du GPS, puis ordonne l'extinction matérielle globale (`PMU.shutdown()`).
+    *   *Note : Si le câble USB reste branché, la tension VBUS maintient l'alimentation de l'ESP32 ; la carte bascule alors automatiquement en veille profonde (Deep Sleep).*
+
+*   **Bouton Utilisateur (GPIO 38)** :
+    *   **Appui Court** : Alterne entre le **Mode Vol 🚀** (performance, fréquence d'envoi nominale, puissance radio max) et le **Mode Éco 🔋** (économie d'énergie, émission ralentie à 15s min, puissance réduite à 10 dBm).
+    *   **Appui Long ($\ge 1.5$ seconde)** : Éteint le GPS et la radio et bascule immédiatement l'ESP32 en **veille Standby** (Deep Sleep, consommation < 15 µA).
+    *   **Réveil (Wakeup)** : Si la carte est en veille Standby, un simple appui sur ce bouton (GPIO 38) réveille instantanément le tracker.
+
+### 💡 Rôle des LEDs (Rouge vs Bleue)
+
+*   **LED Rouge Utilisateur (GPIO 4)** : C'est la seule LED pilotée par le programme. Elle est active à l'état bas (`LOW`).
+    *   **Envoi Télémétrie** : Clignote **1 fois** court à chaque transmission en Mode Vol, et **2 fois** court en Mode Éco.
+    *   **Changement de Mode** : Clignote **1 fois long** (400ms) pour confirmer le passage en Mode Vol, et **2 fois long** (350ms) pour le passage en Mode Éco.
+    *   **Extinction/Veille** : Clignote rapidement 4 fois pour confirmer l'extinction logicielle, ou 1 fois long (400ms) pour confirmer la mise en veille Standby.
+*   **LED Bleue de Charge (CHG)** : Cette LED n'est **pas pilotable logiquement**. Elle est câblée physiquement sur le circuit d'alimentation et s'allume automatiquement en bleu uniquement lorsqu'un accu est en cours de chargement via le port USB. Elle reste éteinte si la batterie est chargée ou absente.
 
 ---
 
@@ -86,85 +93,86 @@ graph TD
     main --> at
 ```
 
-### 📡 Contextes d'Exécution et Priorités (FreeRTOS)
-Le firmware s'exécute de façon asynchrone sur l'ESP32 en combinant des interruptions matérielles (ISR), la boucle principale, et une tâche d'émission LoRa asynchrone.
+### 📡 Contextes d'Exécution et Priorités (FreeRTOS Multicoeur)
+Le firmware tire pleinement parti de l'architecture **double cœur de l'ESP32** :
+*   **Cœur 0 (PRO_CPU)** : Dédié à la réception et au décodage rapide des caractères série du GPS via la tâche `gpsTask`. Cela garantit qu'aucune trame NMEA n'est perdue (zéro risque d'overflow du buffer série UART) même si l'application principale effectue des traitements lourds (comme l'envoi Bluetooth ou le traitement de commandes AT).
+*   **Cœur 1 (APP_CPU)** : Exécute la boucle principale Arduino (`loopTask`) et la tâche d'émission LoRa (`loraTask`), qui partagent les accès SPI et les variables de configuration.
 
 ```mermaid
 graph TD
     %% Flux de contrôle
-    ISR["⏰ Timer (ISR)"] -->|Drapeau send_trigger| Loop["🔄 loopTask (Prio 1)"]
-    Loop -->|Queue gpsQueue| Task["📡 loraTask (Prio 1)"]
+    ISR["⏰ Interruption Timer (ISR)"] -->|Drapeau send_trigger| Loop["🔄 loopTask (Prio 1, Coeur 1)"]
+    Loop -->|Queue gpsQueue| Task["📡 Tâche LoRa (loraTask, Prio 1, Coeur 1)"]
     Task -->|Mutex radioMutex| Radio["📻 Radio LoRa SX1276 (SPI)"]
 
     %% Entrées/Sorties physiques
-    Loop -->|Lit NMEA| GPS["🛰️ GPS UART"]
+    GPS_Task["🛰️ Tâche GPS (gpsTask, Prio 2, Coeur 0)"] -->|Ecriture sous gpsMutex| Shared["🔒 GPS Partagé (sharedGPSData)"]
+    Loop -->|Lecture sous gpsMutex| Shared
+    GPS_Task -->|Lit NMEA| GPS_HW["🛰️ GPS UART"]
     Loop -->|Lit Clics/Extinction| Buttons["🔘 Boutons (GPIO 38 / PEKEY)"]
-    Task -->|Flash 1 ou 2 fois| LED["🔵 LED Bleue (GPIO 4)"]
+    Task -->|Flash 1 ou 2 fois| LED["🔴 LED Rouge (GPIO 4)"]
 ```
 
 ### Rôle et contenu de chaque fichier :
-*   **[include/header.h](file:///c:/Users/paulm/OneDrive/Documents/PlatformIO/Projects/Wasp-TX/include/header.h)** : Déclarations globales. Définit le brochage (pinout) des cartes T-Beam v1.1 et v1.2, la structure binaire de la charge utile WASP (32 octets), et exporte les variables d'état partagées (comme le mode actif `currentMode`).
-*   **[src/main.cpp](file:///c:/Users/paulm/OneDrive/Documents/PlatformIO/Projects/Wasp-TX/src/main.cpp)** : Séquenceur principal. Contient uniquement `setup()`, `loop()`, l'interruption du timer (`onTimer()`), et la boucle de contrôle avec anti-rebond pour le bouton utilisateur.
+*   **[include/header.h](file:///c:/Users/paulm/OneDrive/Documents/PlatformIO/Projects/Wasp-TX/include/header.h)** : Déclarations globales. Définit le brochage (pinout) des cartes T-Beam v1.1 et v1.2, la structure binaire de la charge utile WASP (32 octets), la structure thread-safe `WaspGPSData`, et exporte les variables d'état partagées (comme le mode actif `currentMode`).
+*   **[src/main.cpp](file:///c:/Users/paulm/OneDrive/Documents/PlatformIO/Projects/Wasp-TX/src/main.cpp)** : Séquenceur principal. Contient `setup()`, `loop()`, la tâche prioritaire `gpsTask()` qui décode les trames NMEA en tâche de fond, l'interruption du timer (`onTimer()`), et la boucle de contrôle avec anti-rebond pour le bouton utilisateur.
 *   **[src/pmu.cpp](file:///c:/Users/paulm/OneDrive/Documents/PlatformIO/Projects/Wasp-TX/src/pmu.cpp)** : Gestion d'énergie (PMU AXP192/AXP2101). Initialise le circuit d'alimentation, gère l'extinction logicielle complète (`gracefulShutdown()`) et la veille profonde (`enterStandbyMode()`).
-*   **[src/radio.cpp](file:///c:/Users/paulm/OneDrive/Documents/PlatformIO/Projects/Wasp-TX/src/radio.cpp)** : Émission radio. Gère l'initialisation de la radio SX1276, la tâche FreeRTOS `loraTask()` de transmission (avec modulation du clignotement de la LED bleue) et applique la configuration de puissance/débit via `configureMode()`.
-*   **[src/serial.cpp](file:///c:/Users/paulm/OneDrive/Documents/PlatformIO/Projects/Wasp-TX/src/serial.cpp)** : Communication série et télémétrie. Assemble le paquet WASP (avec encodage du mode actif sur le bit 5 du statut) et émet la trame NectarMC cryptée/CRC sur USB et Bluetooth.
+*   **[src/radio.cpp](file:///c:/Users/paulm/OneDrive/Documents/PlatformIO/Projects/Wasp-TX/src/radio.cpp)** : Émission radio. Gère l'initialisation de la radio SX1276, la tâche FreeRTOS `loraTask()` de transmission (avec modulation du clignotement de la LED rouge) et applique la configuration de puissance/débit via `configureMode()`.
+*   **[src/serial.cpp](file:///c:/Users/paulm/OneDrive/Documents/PlatformIO/Projects/Wasp-TX/src/serial.cpp)** : Communication série et télémétrie. Assemble de manière thread-safe le paquet WASP (avec encodage du mode actif sur le bit 5 du statut) et émet la trame NectarMC cryptée/CRC sur USB et Bluetooth.
 *   **[src/at_commands.cpp](file:///c:/Users/paulm/OneDrive/Documents/PlatformIO/Projects/Wasp-TX/src/at_commands.cpp)** : Interpréteur de commandes. Parse et exécute les commandes AT de configuration dynamique reçues sur l'USB ou le Bluetooth.
 
----
+## Installation et Programmation du Firmware
 
-## External Libraries
+Deux méthodes s'offrent à vous pour programmer votre carte TTGO T-Beam : utiliser les fichiers binaires précompilés (rapide), ou compiler le code source à l'aide de PlatformIO.
 
-Les dépendances du projet sont gérées via `platformio.ini`. Les bibliothèques suivantes sont requises pour le fonctionnement du firmware :
+### Méthode 1 : Utilisation des Binaires Précompilés (Recommandé)
 
-| Library | Version | Purpose |
-| :--- | :--- | :--- |
-| **RadioLib** | `^6.0.0` | Gestion de la communication radio LoRa |
-| **ESP32Time** | `^2.0.0` | Gestion de l'horloge interne (RTC) |
-| **XPowersLib** | `^0.2.6` | Gestion de l'alimentation (PMU AXP192/AXP2101) |
-| **TinyGPSPlus** | `^1.0.3` | Décodage des trames de données GPS |
+Si vous ne souhaitez pas compiler le projet, des fichiers `.bin` déjà compilés pour chaque variante matérielle sont disponibles dans le dossier **[binary/](./binary)**.
 
----
-
-## Firmwares Précompilés (Binaires)
-
-Si vous ne souhaitez pas compiler le code source vous-même, des fichiers binaires prêts à flasher sont mis à votre disposition dans le dossier **[binary/](./binary)**.
-
-| Fichier | Cible Matérielle | Fréquence LoRa | Puce d'Alimentation (PMU) |
+| Binaire à Flasher | Modèle de T-Beam | Fréquence LoRa | Puce PMU |
 | :--- | :--- | :--- | :--- |
-| **[Wasp-TX_v1.1_868MHz.bin](./binary/Wasp-TX_v1.1_868MHz.bin)** | LilyGO T-Beam v1.1 | **868 MHz** | AXP192 |
-| **[Wasp-TX_v1.2_868MHz.bin](./binary/Wasp-TX_v1.2_868MHz.bin)** | LilyGO T-Beam v1.2 | **868 MHz** | AXP2101 |
-| **[Wasp-TX_v1.1_433MHz.bin](./binary/Wasp-TX_v1.1_433MHz.bin)** | LilyGO T-Beam v1.1 | **433 MHz** | AXP192 |
-| **[Wasp-TX_v1.2_433MHz.bin](./binary/Wasp-TX_v1.2_433MHz.bin)** | LilyGO T-Beam v1.2 | **433 MHz** | AXP2101 |
+| **[Wasp-TX_v1.1_868MHz.bin](./binary/Wasp-TX_v1.1_868MHz.bin)** | T-Beam v1.1 | **868 MHz** | AXP192 |
+| **[Wasp-TX_v1.2_868MHz.bin](./binary/Wasp-TX_v1.2_868MHz.bin)** | T-Beam v1.2 | **868 MHz** | AXP2101 |
+| **[Wasp-TX_v1.1_433MHz.bin](./binary/Wasp-TX_v1.1_433MHz.bin)** | T-Beam v1.1 | **433 MHz** | AXP192 |
+| **[Wasp-TX_v1.2_433MHz.bin](./binary/Wasp-TX_v1.2_433MHz.bin)** | T-Beam v1.2 | **433 MHz** | AXP2101 |
 
-Vous pouvez flasher ces fichiers directement à l'aide d'outils comme le [Flash Download Tool d'Espressif](https://www.espressif.com/en/support/download/other-tools) ou l'installateur web ESP Web Flasher.
+**Procédure de flash rapide :**
+1. Connectez votre T-Beam en USB à votre ordinateur.
+2. Ouvrez l'outil de flash en ligne **[ESP Web Flasher](https://esp.github.io/esptool-js/)** ou utilisez l'outil local **Esptool** en ligne de commande :
+   ```bash
+   esptool.py --chip esp32 --port COM_PORT write_flash 0x10000 binary/Wasp-TX_v1.X_XXXMHz.bin
+   ```
+   *(Remplacez `COM_PORT` par le port de votre carte et spécifiez le bon fichier `.bin`)*.
 
 ---
 
-## Compilation et Téléversement (PlatformIO)
+### Méthode 2 : Compilation et Téléversement depuis les Sources (PlatformIO)
 
-Ouvrez le projet dans VS Code avec l'extension PlatformIO, puis compilez l'environnement de votre choix :
+Si vous souhaitez modifier le code ou compiler vous-même le projet, vous devez utiliser **PlatformIO** (intégré à VS Code).
 
-### 1. Versions 868 MHz (Défaut)
-```bash
-# Pour la T-Beam v1.1 (AXP192)
-pio run -e tbeam_v1_1
-pio run -e tbeam_v1_1 -t upload -t monitor
+1. Ouvrez le dossier du projet `Wasp-TX` dans VS Code.
+2. PlatformIO va charger le fichier de configuration `platformio.ini` et installer automatiquement les bibliothèques requises.
+3. Utilisez les boutons de la barre d'état de PlatformIO ou lancez l'une des commandes suivantes dans le terminal intégré pour compiler et envoyer le programme :
 
-# Pour la T-Beam v1.2 (AXP2101)
-pio run -e tbeam_v1_2
-pio run -e tbeam_v1_2 -t upload -t monitor
-```
+#### 🛰️ Pour les versions 868 MHz (Standard)
+*   **Pour T-Beam v1.1 (AXP192)** :
+    ```bash
+    pio run -e tbeam_v1_1 -t upload -t monitor
+    ```
+*   **Pour T-Beam v1.2 (AXP2101)** :
+    ```bash
+    pio run -e tbeam_v1_2 -t upload -t monitor
+    ```
 
-### 2. Versions 433 MHz
-```bash
-# Pour la T-Beam v1.1 (AXP192)
-pio run -e tbeam_v1_1_433
-pio run -e tbeam_v1_1_433 -t upload -t monitor
-
-# Pour la T-Beam v1.2 (AXP2101)
-pio run -e tbeam_v1_2_433
-pio run -e tbeam_v1_2_433 -t upload -t monitor
-```
+#### 🛰️ Pour les versions 433 MHz
+*   **Pour T-Beam v1.1 (AXP192)** :
+    ```bash
+    pio run -e tbeam_v1_1_433 -t upload -t monitor
+    ```
+*   **Pour T-Beam v1.2 (AXP2101)** :
+    ```bash
+    pio run -e tbeam_v1_2_433 -t upload -t monitor
+    ```
 
 ---
 

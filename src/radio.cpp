@@ -125,7 +125,7 @@ void loraTask(void *pvParameters) {
             // Recupere le mode a partir du bit 5 du statut de la payload
             uint8_t mode = (data.status >> 5) & 0x01;
             
-            // Clignotement de la LED bleue (GPIO 4, actif bas) sur transmission
+            // Clignotement de la LED rouge (GPIO 4, actif bas) sur transmission
             pinMode(4, OUTPUT);
             if (mode == 0) {
                 // Mode Vol : 1 flash court

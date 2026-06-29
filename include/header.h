@@ -115,6 +115,20 @@ struct wasp_payload_t {
 };                      // TOTAL = 32 octets
 #pragma pack(pop)
 
+// Structure pour l'échange de données GPS de manière thread-safe
+struct WaspGPSData {
+    double latitude;
+    double longitude;
+    double altitude;
+    double speed;
+    double course;
+    uint32_t satellites;
+    bool fix;
+    uint8_t hour;
+    uint8_t minute;
+    uint8_t second;
+};
+
 // ============================================================================
 // 6. DECLARATIONS DES VARIABLES GLOBALES (EXTERN)
 // ============================================================================
@@ -128,6 +142,8 @@ extern SX1276 radio;
 extern ESP32Time rtc;
 extern QueueHandle_t gpsQueue;
 extern SemaphoreHandle_t radioMutex;
+extern SemaphoreHandle_t gpsMutex;
+extern WaspGPSData sharedGPSData;
 extern LoRaConfig activeConfig;
 extern volatile bool send_trigger;
 extern volatile uint8_t currentMode;

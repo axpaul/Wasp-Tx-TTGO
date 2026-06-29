@@ -20,6 +20,8 @@ ESP32Time rtc;
 BluetoothSerial SerialBT;
 QueueHandle_t gpsQueue = NULL;
 SemaphoreHandle_t radioMutex = NULL;
+SemaphoreHandle_t gpsMutex = NULL;
+WaspGPSData sharedGPSData = {0};
 TinyGPSPlus gps;
 volatile uint8_t currentMode = 0;
 volatile bool send_trigger = false;
